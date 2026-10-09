@@ -1,0 +1,1189 @@
+// A minimal stand-in for the parts of the JUCE API that the checks care about.
+// Signatures mirror JUCE's own so the tests exercise the same AST shapes as real
+// projects, without the cost of parsing the real JUCE modules for every test.
+
+#pragma once
+
+#include <atomic>
+#include <cmath>
+#include <cstdlib>
+#include <functional>
+#include <memory>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+#define JUCE_MAC 1
+#define JUCE_DEBUG 1
+#define JUCE_CLANG 1
+#define JUCE_64BIT 1
+#define JUCE_ARM 1
+#define JUCE_LITTLE_ENDIAN 1
+
+#define JUCE_API
+#define JUCE_JOIN_MACRO_HELPER(a, b) a##b
+#define JUCE_JOIN_MACRO(a, b) JUCE_JOIN_MACRO_HELPER (a, b)
+#define JUCE_BLOCK_WITH_FORCED_SEMICOLON(x) do { x } while (false)
+
+namespace juce
+{
+using int8 = signed char;
+using uint8 = unsigned char;
+using int16 = signed short;
+using uint16 = unsigned short;
+using int32 = signed int;
+using uint32 = unsigned int;
+using int64 = long long;
+using uint64 = unsigned long long;
+
+void logAssertion (const char* file, int line) noexcept;
+
+template <typename... Types>
+void ignoreUnused (Types&&...) noexcept
+{
+}
+
+template <typename OwnerClass>
+class LeakedObjectDetector
+{
+public:
+    LeakedObjectDetector() noexcept {}
+    LeakedObjectDetector (const LeakedObjectDetector&) noexcept {}
+    ~LeakedObjectDetector() {}
+};
+
+template <typename Type>
+void deleteAndZero (Type& pointer)
+{
+    delete pointer;
+    pointer = nullptr;
+}
+
+template <typename Type>
+constexpr Type jmax (Type a, Type b);
+template <typename Type>
+constexpr Type jmax (Type a, Type b, Type c);
+template <typename Type>
+constexpr Type jmax (Type a, Type b, Type c, Type d);
+
+template <typename Type>
+constexpr Type jmin (Type a, Type b);
+template <typename Type>
+constexpr Type jmin (Type a, Type b, Type c);
+template <typename Type>
+constexpr Type jmin (Type a, Type b, Type c, Type d);
+
+template <typename Type>
+Type jlimit (Type lowerLimit, Type upperLimit, Type valueToConstrain) noexcept;
+
+template <typename Type>
+Type juce_hypot (Type a, Type b) noexcept;
+
+template <>
+float juce_hypot (float a, float b) noexcept;
+
+template <typename NumericType>
+bool juce_isfinite (NumericType value) noexcept;
+
+class StringRef;
+
+class String
+{
+public:
+    String() noexcept;
+    String (const String&) noexcept;
+    String (String&&) noexcept;
+    String (const char*);
+    String (const char*, size_t maxChars);
+   #if __cpp_char8_t
+    String (const char8_t*);
+    String (const char8_t*, size_t maxChars);
+   #endif
+    String (const std::string&);
+    explicit String (int);
+    explicit String (float);
+    ~String();
+
+    String& operator= (const String&) noexcept;
+    String& operator+= (const String&);
+    String& operator<< (const String&);
+    String& operator<< (int);
+
+    static String formatted (const String& format, ...);
+    static String fromUTF8 (const char* utf8buffer, int bufferSizeBytes = -1);
+   #if __cpp_char8_t
+    static String fromUTF8 (const char8_t* utf8buffer, int bufferSizeBytes = -1);
+   #endif
+
+    String trim() const;
+    String toLowerCase() const;
+    String substring (int startIndex) const;
+    std::string toStdString() const;
+    bool equalsIgnoreCase (StringRef other) const noexcept;
+    String toUpperCase() const;
+    String replace (StringRef stringToReplace, StringRef stringToInsertInstead, bool ignoreCase = false) const;
+
+    int length() const noexcept;
+    bool isEmpty() const noexcept;
+};
+
+String operator+ (const String&, const String&);
+bool operator== (const String&, const char*) noexcept;
+bool operator== (const String&, const String&) noexcept;
+String operator+ (const char*, const String&);
+String operator+ (const String&, const char*);
+
+class StringRef
+{
+public:
+    StringRef() noexcept;
+    StringRef (const char*) noexcept;
+    StringRef (const String&) noexcept;
+};
+
+class Identifier
+{
+public:
+    Identifier (const char*);
+    Identifier (const String&);
+    operator StringRef() const noexcept;
+};
+
+class CharPointer_UTF8
+{
+public:
+    explicit CharPointer_UTF8 (const char*) noexcept;
+};
+
+class Colour
+{
+public:
+    constexpr Colour() noexcept = default;
+    constexpr explicit Colour (uint32 argb) noexcept : argb (argb) {}
+
+private:
+    uint32 argb = 0;
+};
+
+template <typename ValueType>
+class Point
+{
+public:
+    constexpr Point() = default;
+    constexpr Point (ValueType x, ValueType y) noexcept : x (x), y (y) {}
+
+    ValueType x {};
+    ValueType y {};
+};
+
+template <typename ValueType>
+class Rectangle
+{
+public:
+    Rectangle() = default;
+    Rectangle (ValueType x, ValueType y, ValueType w, ValueType h) noexcept;
+};
+
+template <typename ValueType>
+class Range
+{
+public:
+    constexpr Range() = default;
+    constexpr Range (ValueType start, ValueType end) noexcept : start (start), end (end) {}
+
+private:
+    ValueType start {};
+    ValueType end {};
+};
+
+class Time
+{
+public:
+    static Time getCurrentTime() noexcept;
+};
+
+class RelativeTime
+{
+public:
+    explicit RelativeTime (double seconds = 0.0) noexcept;
+};
+
+class ModifierKeys
+{
+};
+
+class Justification
+{
+public:
+    Justification (int flags) noexcept;
+};
+
+class PixelARGB
+{
+};
+
+class PixelRGB
+{
+};
+
+template <typename ElementType>
+class Array
+{
+public:
+    void add (const ElementType&);
+    void insert (int index, const ElementType&);
+    void resize (int size);
+    void ensureStorageAllocated (int size);
+    void clear();
+    int size() const noexcept;
+    ElementType& getReference (int index) noexcept;
+};
+
+template <typename ObjectClass>
+class OwnedArray
+{
+public:
+    ObjectClass* add (ObjectClass*);
+    ObjectClass* operator[] (int index) const noexcept;
+    int size() const noexcept;
+};
+
+template <typename ElementType>
+class HeapBlock
+{
+public:
+    HeapBlock() = default;
+    explicit HeapBlock (size_t numElements);
+    void malloc (size_t numElements);
+    void allocate (size_t numElements, bool initialiseToZero);
+    ElementType* get() const noexcept;
+};
+
+class var
+{
+public:
+    var() noexcept;
+    var (int);
+    var (const String&);
+};
+
+class XmlElement
+{
+public:
+    String getTagName() const;
+    bool hasTagName (StringRef possibleTagName) const noexcept;
+};
+
+std::unique_ptr<XmlElement> parseXML (const String& textToParse);
+
+class UndoManager
+{
+public:
+    bool undo();
+    void beginNewTransaction();
+};
+
+class ValueTree
+{
+public:
+    class Listener
+    {
+    public:
+        virtual ~Listener() = default;
+        virtual void valueTreePropertyChanged (ValueTree&, const Identifier&) {}
+    };
+
+    ValueTree() noexcept;
+    explicit ValueTree (const Identifier& type);
+    ValueTree (const ValueTree&) noexcept;
+    ValueTree& operator= (const ValueTree&);
+
+    bool operator== (const ValueTree&) const noexcept;
+    bool operator!= (const ValueTree&) const noexcept;
+    bool isEquivalentTo (const ValueTree&) const;
+    bool isValid() const noexcept;
+    ValueTree createCopy() const;
+    Identifier getType() const noexcept;
+    bool hasType (const Identifier& typeName) const noexcept;
+
+    const var& getProperty (const Identifier&) const noexcept;
+    ValueTree& setProperty (const Identifier&, const var&, UndoManager* undoManager);
+    void removeProperty (const Identifier& name, UndoManager* undoManager);
+    ValueTree getChild (int index) const;
+    ValueTree getChildWithName (const Identifier& type) const;
+    ValueTree getOrCreateChildWithName (const Identifier& type, UndoManager* undoManager);
+    ValueTree getChildWithProperty (const Identifier& propertyName, const var& propertyValue) const;
+    ValueTree getParent() const noexcept;
+    ValueTree getSibling (int delta) const noexcept;
+    void appendChild (const ValueTree& child, UndoManager* undoManager);
+    void removeChild (const ValueTree& child, UndoManager* undoManager);
+    std::unique_ptr<XmlElement> createXml() const;
+    static ValueTree fromXml (const XmlElement& xml);
+    static ValueTree readFromData (const void* data, size_t numBytes);
+    void addListener (Listener* listener);
+    void removeListener (Listener* listener);
+};
+
+template <typename Type>
+class CachedValue : private ValueTree::Listener
+{
+public:
+    CachedValue();
+    CachedValue (ValueTree& tree, const Identifier& propertyID, UndoManager* undoManager);
+    void referTo (ValueTree& tree, const Identifier& property, UndoManager* undoManager);
+    Type get() const noexcept;
+    operator Type() const noexcept;
+    CachedValue& operator= (const Type& newValue);
+};
+
+class Value
+{
+public:
+    class Listener
+    {
+    public:
+        virtual ~Listener() = default;
+        virtual void valueChanged (Value&) = 0;
+    };
+
+    Value();
+    Value (const Value&);
+    void addListener (Listener* listener);
+    void removeListener (Listener* listener);
+};
+
+class MemoryBlock
+{
+public:
+    void setSize (size_t newSize, bool initialiseNewSpaceToZero = false);
+};
+
+template <typename ObjectType>
+class WeakReference
+{
+public:
+    WeakReference() noexcept = default;
+    WeakReference (ObjectType*);
+    ObjectType* get() const noexcept;
+    operator ObjectType*() const noexcept;
+    ObjectType* operator->() const noexcept;
+};
+
+template <typename ObjectType>
+class ReferenceCountedObjectPtr
+{
+public:
+    ReferenceCountedObjectPtr() noexcept = default;
+    ReferenceCountedObjectPtr (ObjectType*) noexcept;
+    operator ObjectType*() const noexcept;
+    ObjectType* operator->() const noexcept;
+};
+
+//==============================================================================
+class CriticalSection
+{
+public:
+    void enter() const noexcept;
+    bool tryEnter() const noexcept;
+    void exit() const noexcept;
+};
+
+class SpinLock
+{
+public:
+    void enter() const noexcept;
+    bool tryEnter() const noexcept;
+    void exit() const noexcept;
+};
+
+template <class LockType>
+class GenericScopedLock
+{
+public:
+    explicit GenericScopedLock (const LockType&) noexcept;
+    ~GenericScopedLock() noexcept;
+};
+
+template <class LockType>
+class GenericScopedTryLock
+{
+public:
+    explicit GenericScopedTryLock (const LockType&, bool acquireLockOnInitialisation = true) noexcept;
+    ~GenericScopedTryLock() noexcept;
+    bool isLocked() const noexcept;
+};
+
+using ScopedLock = GenericScopedLock<CriticalSection>;
+using ScopedTryLock = GenericScopedTryLock<CriticalSection>;
+
+class WaitableEvent
+{
+public:
+    bool wait (double timeOutMilliseconds = -1.0) const;
+    void signal() const;
+};
+
+class Logger
+{
+public:
+    static void writeToLog (const String& message);
+    static void outputDebugString (const String& text);
+};
+
+class File
+{
+public:
+    File() = default;
+    File (const String& absolutePath);
+    bool exists() const;
+    File getChildFile (StringRef relativeOrAbsolutePath) const;
+    static File getCurrentWorkingDirectory();
+    bool replaceWithText (const String& text) const;
+};
+
+class MessageManager
+{
+public:
+    static MessageManager* getInstance();
+    static MessageManager* getInstanceWithoutCreating() noexcept;
+    static bool callAsync (std::function<void()> functionToCall);
+    void* callFunctionOnMessageThread (void* (*func) (void*), void* userData);
+    bool isThisTheMessageThread() const noexcept;
+};
+
+class Thread;
+
+class MessageManagerLock
+{
+public:
+    explicit MessageManagerLock (Thread* threadToCheckForExitSignal = nullptr);
+    ~MessageManagerLock() noexcept;
+    bool lockWasGained() const noexcept;
+};
+
+class ChangeBroadcaster;
+
+class ChangeListener
+{
+public:
+    virtual ~ChangeListener() = default;
+    virtual void changeListenerCallback (ChangeBroadcaster* source) = 0;
+};
+
+class ChangeBroadcaster
+{
+public:
+    virtual ~ChangeBroadcaster();
+    void addChangeListener (ChangeListener* listener);
+    void removeChangeListener (ChangeListener* listener);
+    void sendChangeMessage();
+};
+
+class AsyncUpdater
+{
+public:
+    virtual ~AsyncUpdater();
+    virtual void handleAsyncUpdate() = 0;
+    void triggerAsyncUpdate();
+};
+
+class Timer
+{
+public:
+    virtual ~Timer();
+    virtual void timerCallback() = 0;
+    void startTimer (int intervalInMilliseconds) noexcept;
+    void stopTimer() noexcept;
+    static void callAfterDelay (int milliseconds, std::function<void()> functionToCall);
+};
+
+class HighResolutionTimer
+{
+public:
+    virtual ~HighResolutionTimer();
+    virtual void hiResTimerCallback() = 0;
+    void startTimer (int intervalInMilliseconds);
+    void stopTimer();
+};
+
+class Thread
+{
+public:
+    explicit Thread (const String& threadName, size_t threadStackSize = 0);
+    virtual ~Thread();
+    virtual void run() = 0;
+    bool startThread();
+    bool stopThread (int timeOutMilliseconds);
+    void signalThreadShouldExit();
+    bool threadShouldExit() const;
+    static bool currentThreadShouldExit();
+    static Thread* getCurrentThread();
+    bool wait (double timeOutMilliseconds) const;
+    static void sleep (int milliseconds);
+    static bool launch (std::function<void()> functionToRun);
+};
+
+//==============================================================================
+class Image
+{
+public:
+    enum PixelFormat
+    {
+        UnknownFormat,
+        RGB,
+        ARGB,
+        SingleChannel
+    };
+
+    Image() noexcept;
+    Image (PixelFormat format, int imageWidth, int imageHeight, bool clearImage);
+    Image (const Image&) noexcept;
+};
+
+class ImageFileFormat
+{
+public:
+    static Image loadFrom (const void* rawData, size_t numBytesOfData);
+};
+
+class ImageCache
+{
+public:
+    static Image getFromMemory (const void* imageData, int dataSize);
+};
+
+class Drawable
+{
+public:
+    virtual ~Drawable();
+    static std::unique_ptr<Drawable> createFromImageData (const void* data, size_t numBytes);
+};
+
+class Graphics
+{
+public:
+    void fillAll (Colour) const;
+    void fillAll() const;
+    void fillRect (Rectangle<int> area) const;
+    void setColour (Colour newColour);
+    void drawImageAt (const Image& imageToDraw, int topLeftX, int topLeftY, bool fillAlphaChannelWithCurrentBrush = false) const;
+    void saveState();
+    void restoreState();
+
+    class ScopedSaveState
+    {
+    public:
+        explicit ScopedSaveState (Graphics&);
+        ~ScopedSaveState();
+    };
+};
+
+class MouseEvent
+{
+};
+
+class LookAndFeel
+{
+public:
+    virtual ~LookAndFeel();
+    static void setDefaultLookAndFeel (LookAndFeel* newDefaultLookAndFeel) noexcept;
+};
+
+class LookAndFeel_V4 : public LookAndFeel
+{
+};
+
+class ComponentListener;
+
+class Component
+{
+public:
+    Component() noexcept;
+    virtual ~Component();
+
+    Component (const Component&) = delete;
+    Component& operator= (const Component&) = delete;
+
+    virtual void paint (Graphics&);
+    virtual void resized();
+    virtual void paintOverChildren (Graphics&);
+    virtual void mouseDown (const MouseEvent&);
+
+    void addAndMakeVisible (Component* child, int zOrder = -1);
+    void addAndMakeVisible (Component& child, int zOrder = -1);
+    void addChildComponent (Component* child, int zOrder = -1);
+    void addChildComponent (Component& child, int zOrder = -1);
+    void deleteAllChildren();
+    void removeChildComponent (Component* child);
+
+    void setSize (int width, int height);
+    void setBounds (int x, int y, int width, int height);
+    void repaint();
+    void setLookAndFeel (LookAndFeel* newLookAndFeel);
+    void setBounds (Rectangle<int> newBounds);
+    void setTopLeftPosition (int x, int y);
+    void setVisible (bool shouldBeVisible);
+    void setOpaque (bool shouldBeOpaque);
+    void toFront (bool shouldAlsoGainKeyboardFocus);
+    void addToDesktop (int windowStyleFlags, void* nativeWindowToAttachTo = nullptr);
+    Rectangle<int> getLocalBounds() const noexcept;
+    int getWidth() const noexcept;
+    int getHeight() const noexcept;
+
+    Component* getParentComponent() const noexcept;
+    void addComponentListener (ComponentListener* listener);
+    void removeComponentListener (ComponentListener* listener);
+    void addMouseListener (Component* newListener, bool wantsEventsForAllNestedChildComponents);
+    void removeMouseListener (Component* listenerToRemove);
+
+    template <class TargetClass>
+    TargetClass* findParentComponentOfClass() const;
+
+    template <class ComponentType>
+    class SafePointer
+    {
+    public:
+        SafePointer() noexcept = default;
+        SafePointer (ComponentType* component);
+        ComponentType* getComponent() const noexcept;
+        operator ComponentType*() const noexcept;
+        ComponentType* operator->() const noexcept;
+    };
+};
+
+class ComponentListener
+{
+public:
+    virtual ~ComponentListener() = default;
+    virtual void componentMovedOrResized (Component&, bool wasMoved, bool wasResized);
+};
+
+class Button : public Component
+{
+public:
+    class Listener
+    {
+    public:
+        virtual ~Listener() = default;
+        virtual void buttonClicked (Button*) = 0;
+    };
+
+    void addListener (Listener* listener);
+    void removeListener (Listener* listener);
+
+    std::function<void()> onClick;
+};
+
+class TextButton : public Button
+{
+public:
+    TextButton();
+    explicit TextButton (const String& buttonName);
+};
+
+class Slider : public Component
+{
+public:
+    class Listener
+    {
+    public:
+        virtual ~Listener() = default;
+        virtual void sliderValueChanged (Slider*) = 0;
+    };
+
+    void addListener (Listener* listener);
+    void removeListener (Listener* listener);
+    double getValue() const;
+    void paint (Graphics&) override;
+    void resized() override;
+
+    std::function<void()> onValueChange;
+};
+
+class Label : public Component
+{
+public:
+    Label();
+};
+
+class ToggleButton : public Button
+{
+public:
+    ToggleButton();
+};
+
+class ComboBox : public Component
+{
+public:
+    std::function<void()> onChange;
+};
+
+class Viewport : public Component
+{
+public:
+    void setViewedComponent (Component* newViewedComponent, bool deleteComponentWhenNoLongerNeeded = true);
+};
+
+class FlexItem
+{
+public:
+    FlexItem() noexcept;
+    FlexItem (Component& componentToControl) noexcept;
+};
+
+class FlexBox
+{
+public:
+    void performLayout (Rectangle<int> targetArea);
+    Array<FlexItem> items;
+};
+
+class File;
+
+class FileChooser
+{
+public:
+    explicit FileChooser (const String& dialogBoxTitle);
+    ~FileChooser();
+    void launchAsync (int flags, std::function<void (const FileChooser&)> callback, void* previewComponent = nullptr);
+};
+
+class OpenGLContext
+{
+public:
+    OpenGLContext();
+    ~OpenGLContext();
+    void attachTo (Component& component);
+    void detach();
+};
+
+class TopLevelWindow : public Component
+{
+};
+
+class ResizableWindow : public TopLevelWindow
+{
+public:
+    void setContentOwned (Component* newContentComponent, bool resizeToFitWhenContentChangesSize);
+    void setContentNonOwned (Component* newContentComponent, bool resizeToFitWhenContentChangesSize);
+};
+
+class DocumentWindow : public ResizableWindow
+{
+};
+
+class TooltipWindow : public Component
+{
+public:
+    explicit TooltipWindow (Component* parentComponent = nullptr, int millisecondsBeforeTipAppears = 700);
+};
+
+class NativeMessageBox
+{
+public:
+    static void showAsync (const String& message, std::function<void (int)> callback);
+};
+
+//==============================================================================
+template <typename Type>
+class AudioBuffer
+{
+public:
+    AudioBuffer() noexcept;
+    AudioBuffer (int numChannels, int numSamples);
+    AudioBuffer (const AudioBuffer& other);
+    AudioBuffer& operator= (const AudioBuffer& other);
+
+    int getNumChannels() const noexcept;
+    int getNumSamples() const noexcept;
+    const Type* getReadPointer (int channel) const noexcept;
+    Type* getWritePointer (int channel) noexcept;
+    Type getSample (int channel, int sampleIndex) const noexcept;
+    void setSample (int destChannel, int destSample, Type newValue) noexcept;
+    void addSample (int destChannel, int destSample, Type valueToAdd) noexcept;
+    void clear() noexcept;
+    void applyGain (Type gain) noexcept;
+    void setSize (int newNumChannels,
+                  int newNumSamples,
+                  bool keepExistingContent = false,
+                  bool clearExtraSpace = false,
+                  bool avoidReallocating = false);
+    void makeCopyOf (const AudioBuffer& other, bool avoidReallocating = false);
+};
+
+namespace ValueSmoothingTypes
+{
+struct Linear
+{
+};
+} // namespace ValueSmoothingTypes
+
+template <typename FloatType, typename SmoothingType = ValueSmoothingTypes::Linear>
+class SmoothedValue
+{
+public:
+    SmoothedValue() noexcept;
+    void reset (double sampleRate, double rampLengthInSeconds) noexcept;
+    void reset (int numSteps) noexcept;
+    void setTargetValue (FloatType newValue) noexcept;
+    FloatType getNextValue() noexcept;
+};
+
+class ADSR
+{
+public:
+    void setSampleRate (double sampleRate) noexcept;
+    float getNextSample() noexcept;
+};
+
+class Reverb
+{
+public:
+    void setSampleRate (double sampleRate);
+    void processStereo (float* left, float* right, int numSamples) noexcept;
+};
+
+namespace dsp
+{
+struct ProcessSpec
+{
+    double sampleRate;
+    uint32 maximumBlockSize;
+    uint32 numChannels;
+};
+
+template <typename SampleType>
+class Gain
+{
+public:
+    void prepare (const ProcessSpec& spec) noexcept;
+    void reset() noexcept;
+    void setGainDecibels (SampleType newGainDecibels) noexcept;
+    SampleType processSample (SampleType sample) noexcept;
+};
+
+namespace IIR
+{
+template <typename NumericType>
+class Coefficients
+{
+public:
+    using Ptr = ReferenceCountedObjectPtr<Coefficients>;
+    static Ptr makeLowPass (double sampleRate, NumericType frequency);
+};
+
+template <typename SampleType>
+class Filter
+{
+public:
+    void prepare (const ProcessSpec&) noexcept;
+    void reset() noexcept;
+    SampleType processSample (SampleType sample) noexcept;
+    typename Coefficients<SampleType>::Ptr coefficients;
+};
+} // namespace IIR
+
+template <typename SampleType>
+class Oversampling
+{
+public:
+    void initProcessing (size_t maximumNumberOfSamplesBeforeOversampling);
+};
+} // namespace dsp
+
+class MidiBuffer
+{
+public:
+    void clear() noexcept;
+};
+
+class ScopedNoDenormals
+{
+public:
+    ScopedNoDenormals() noexcept;
+    ~ScopedNoDenormals() noexcept;
+};
+
+class FloatVectorOperations
+{
+public:
+    static void disableDenormalisedNumberSupport (bool shouldDisable = true) noexcept;
+};
+
+class AudioPlayHead
+{
+public:
+    struct PositionInfo
+    {
+        double getBpm() const;
+    };
+
+    virtual ~AudioPlayHead() = default;
+    virtual PositionInfo getPosition() const = 0;
+};
+
+class ParameterID
+{
+public:
+    ParameterID() = default;
+
+    template <typename StringLike, typename = std::enable_if_t<! std::is_base_of_v<ParameterID, std::decay_t<StringLike>>>>
+    ParameterID (StringLike&& identifier, int versionHint = 0)
+        : paramID (std::forward<StringLike> (identifier)), version (versionHint)
+    {
+    }
+
+    String getParamID() const;
+    int getVersionHint() const;
+
+private:
+    String paramID;
+    int version = 0;
+};
+
+template <typename ValueType>
+class NormalisableRange
+{
+public:
+    NormalisableRange() = default;
+    NormalisableRange (ValueType rangeStart, ValueType rangeEnd);
+};
+
+class AudioProcessorParameter
+{
+public:
+    virtual ~AudioProcessorParameter();
+    virtual float getValue() const = 0;
+
+    struct Listener
+    {
+        virtual ~Listener() = default;
+        virtual void parameterValueChanged (int parameterIndex, float newValue) = 0;
+        virtual void parameterGestureChanged (int parameterIndex, bool gestureIsStarting) = 0;
+    };
+
+    void addListener (Listener* newListener);
+    void removeListener (Listener* listenerToRemove);
+};
+
+class AudioProcessorParameterWithID : public AudioProcessorParameter
+{
+public:
+    AudioProcessorParameterWithID (const ParameterID& parameterID, const String& parameterName);
+};
+
+class RangedAudioParameter : public AudioProcessorParameterWithID
+{
+public:
+    using AudioProcessorParameterWithID::AudioProcessorParameterWithID;
+    float convertFrom0to1 (float proportion) const noexcept;
+};
+
+class AudioParameterFloat : public RangedAudioParameter
+{
+public:
+    AudioParameterFloat (const ParameterID& parameterID,
+                         const String& parameterName,
+                         NormalisableRange<float> normalisableRange,
+                         float defaultValue);
+    AudioParameterFloat (const ParameterID& parameterID,
+                         const String& parameterName,
+                         float minValue,
+                         float maxValue,
+                         float defaultValue);
+    float get() const noexcept;
+
+protected:
+    virtual void valueChanged (float newValue);
+
+private:
+    float getValue() const override;
+};
+
+class AudioParameterBool : public RangedAudioParameter
+{
+public:
+    AudioParameterBool (const ParameterID& parameterID, const String& parameterName, bool defaultValue);
+    bool get() const noexcept;
+
+private:
+    float getValue() const override;
+};
+
+class AudioProcessorEditor;
+class AudioProcessor;
+
+class AudioProcessorListener
+{
+public:
+    virtual ~AudioProcessorListener() = default;
+    virtual void audioProcessorParameterChanged (AudioProcessor* processor, int parameterIndex, float newValue) = 0;
+};
+
+class AudioProcessor
+{
+public:
+    AudioProcessor();
+    virtual ~AudioProcessor();
+
+    virtual void prepareToPlay (double sampleRate, int maximumExpectedSamplesPerBlock) = 0;
+    virtual void releaseResources() = 0;
+    virtual void processBlock (AudioBuffer<float>& buffer, MidiBuffer& midiMessages) = 0;
+    virtual void processBlock (AudioBuffer<double>& buffer, MidiBuffer& midiMessages);
+    virtual void processBlockBypassed (AudioBuffer<float>& buffer, MidiBuffer& midiMessages);
+    virtual AudioProcessorEditor* createEditor() = 0;
+    virtual void getStateInformation (MemoryBlock& destData) = 0;
+    virtual void setStateInformation (const void* data, int sizeInBytes) = 0;
+
+    static void copyXmlToBinary (const XmlElement& xml, MemoryBlock& destData);
+    static std::unique_ptr<XmlElement> getXmlFromBinary (const void* data, int sizeInBytes);
+
+    AudioPlayHead* getPlayHead() const noexcept;
+    AudioProcessorEditor* getActiveEditor() const noexcept;
+    void addParameter (AudioProcessorParameter* parameter);
+};
+
+class AudioProcessorEditor : public Component
+{
+public:
+    explicit AudioProcessorEditor (AudioProcessor&) noexcept;
+    ~AudioProcessorEditor() override;
+};
+
+class AudioProcessorValueTreeState
+{
+public:
+    class Listener
+    {
+    public:
+        virtual ~Listener() = default;
+        virtual void parameterChanged (const String& parameterID, float newValue) = 0;
+    };
+
+    class ParameterLayout
+    {
+    public:
+        ParameterLayout() = default;
+
+        template <typename... Items>
+        ParameterLayout (std::unique_ptr<Items>... items);
+
+        template <typename... Items>
+        void add (std::unique_ptr<Items>... items);
+    };
+
+    AudioProcessorValueTreeState (AudioProcessor& processor, void* undoManager, const Identifier& valueTreeType, ParameterLayout parameterLayout);
+
+    RangedAudioParameter* getParameter (StringRef parameterID) const noexcept;
+    std::atomic<float>* getRawParameterValue (StringRef parameterID) const noexcept;
+    void addParameterListener (StringRef parameterID, Listener* listener);
+    void removeParameterListener (StringRef parameterID, Listener* listener);
+
+    ValueTree copyState();
+    void replaceState (const ValueTree& newState);
+
+    class SliderAttachment
+    {
+    public:
+        SliderAttachment (AudioProcessorValueTreeState& stateToUse, const String& parameterID, Slider& slider);
+        ~SliderAttachment();
+    };
+
+    class ButtonAttachment
+    {
+    public:
+        ButtonAttachment (AudioProcessorValueTreeState& stateToUse, const String& parameterID, Button& button);
+        ~ButtonAttachment();
+    };
+
+    class ComboBoxAttachment
+    {
+    public:
+        ComboBoxAttachment (AudioProcessorValueTreeState& stateToUse, const String& parameterID, ComboBox& combo);
+        ~ComboBoxAttachment();
+    };
+
+    ValueTree state;
+};
+
+class SliderParameterAttachment
+{
+public:
+    SliderParameterAttachment (RangedAudioParameter& parameter, Slider& slider, void* undoManager = nullptr);
+    ~SliderParameterAttachment();
+};
+
+class TimeSliceClient
+{
+public:
+    virtual ~TimeSliceClient() = default;
+    virtual int useTimeSlice() = 0;
+};
+
+class TimeSliceThread : public Thread
+{
+public:
+    explicit TimeSliceThread (const String& threadName);
+    void addTimeSliceClient (TimeSliceClient* clientToAdd, int millisecondsBeforeStarting = 0);
+    void removeTimeSliceClient (TimeSliceClient* clientToRemove);
+    void run() override;
+};
+
+struct AudioSourceChannelInfo
+{
+    AudioBuffer<float>* buffer;
+    int startSample;
+    int numSamples;
+};
+
+class AudioSource
+{
+public:
+    virtual ~AudioSource() = default;
+    virtual void prepareToPlay (int samplesPerBlockExpected, double sampleRate) = 0;
+    virtual void releaseResources() = 0;
+    virtual void getNextAudioBlock (const AudioSourceChannelInfo& bufferToFill) = 0;
+};
+
+class AudioIODeviceCallbackContext
+{
+};
+
+class AudioIODeviceCallback
+{
+public:
+    virtual ~AudioIODeviceCallback() = default;
+    virtual void audioDeviceIOCallbackWithContext (const float* const* inputChannelData,
+                                                   int numInputChannels,
+                                                   float* const* outputChannelData,
+                                                   int numOutputChannels,
+                                                   int numSamples,
+                                                   const AudioIODeviceCallbackContext& context);
+};
+
+class AudioDeviceManager
+{
+public:
+    void addAudioCallback (AudioIODeviceCallback* newCallback);
+    void removeAudioCallback (AudioIODeviceCallback* callback);
+};
+} // namespace juce
+
+#define JUCE_DECLARE_NON_COPYABLE(className) \
+    className (const className&) = delete;   \
+    className& operator= (const className&) = delete;
+
+#define JUCE_LEAK_DETECTOR(OwnerClass)                                                 \
+    friend class juce::LeakedObjectDetector<OwnerClass>;                               \
+    static const char* getLeakedObjectClassName() noexcept { return #OwnerClass; }     \
+    juce::LeakedObjectDetector<OwnerClass> JUCE_JOIN_MACRO (leakDetector, __LINE__);
+
+#define JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(className) \
+    JUCE_DECLARE_NON_COPYABLE (className)                       \
+    JUCE_LEAK_DETECTOR (className)
+
+#define jassertfalse JUCE_BLOCK_WITH_FORCED_SEMICOLON (juce::logAssertion (__FILE__, __LINE__);)
+#define jassert(expression) JUCE_BLOCK_WITH_FORCED_SEMICOLON (if (! (expression)) jassertfalse;)
+
+#define DBG(textToWrite) JUCE_BLOCK_WITH_FORCED_SEMICOLON (juce::String tempDbgBuf; tempDbgBuf << textToWrite; juce::Logger::outputDebugString (tempDbgBuf);)
