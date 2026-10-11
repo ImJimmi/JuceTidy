@@ -165,6 +165,96 @@ private:
 [6] warning: 'resonance' is never attached to a ValueTree. Call 'resonance.referTo(...) before using it' [juce-unbound-cached-value]
 ```
 
+### `WebBrowserComponent` checks
+
+Various checks for common `WebBrowserComponent` misuse, including several problems that only show up on Windows.
+
+- [`juce-attachment-order`](docs/checks.md#juce-attachment-order)
+- [`juce-duplicate-webview-name`](docs/checks.md#juce-duplicate-webview-name)
+- [`juce-hardcoded-resource-provider-root`](docs/checks.md#juce-hardcoded-resource-provider-root)
+- [`juce-native-function-completion`](docs/checks.md#juce-native-function-completion)
+- [`juce-unregistered-web-relay`](docs/checks.md#juce-unregistered-web-relay)
+- [`juce-unrestricted-webview-navigation`](docs/checks.md#juce-unrestricted-webview-navigation)
+- [`juce-webview-dev-server-in-release`](docs/checks.md#juce-webview-dev-server-in-release)
+- [`juce-webview-event-before-load`](docs/checks.md#juce-webview-event-before-load)
+- [`juce-webview-resource-mime-type`](docs/checks.md#juce-webview-resource-mime-type)
+- [`juce-webview-windows-options`](docs/checks.md#juce-webview-windows-options)
+
+```cpp
+class Editor : public juce::AudioProcessorEditor
+{
+public:
+    Editor(juce::AudioProcessor& p, juce::RangedAudioParameter& gain)
+        : juce::AudioProcessorEditor{ p }
+        , gainAttachment{ gain, gainRelay }
+    {
+        addAndMakeVisible(webview);
+        webview.goToURL("juce://juce.backend/");             // [1]
+        webview.emitEventIfBrowserIsVisible("ready", true); // [2]
+    }
+
+private:
+    juce::WebBrowserComponent webview{                      // [3]
+        juce::WebBrowserComponent::Options{}
+            .withNativeIntegrationEnabled()                 // [4]
+            .withOptionsFrom(gainRelay)
+            .withNativeFunction("save", [](auto& args, auto complete) { // [5]
+                save(args[0]);
+            })
+    };
+    juce::WebSliderRelay gainRelay{ "gain" };               // [6]
+    juce::WebToggleButtonRelay bypassRelay{ "bypass" };     // [7]
+    juce::WebSliderParameterAttachment gainAttachment;
+};
+```
+
+```text
+[1] warning: 'juce://juce.backend' is only the resource provider root on macOS, iOS and Linux. Use 'juce::WebBrowserComponent::getResourceProviderRoot()' instead [juce-hardcoded-resource-provider-root]
+[2] warning: the page won't have loaded yet, so the frontend can't receive this event. Use 'withInitialisationData()' to pass initial state to the page [juce-webview-event-before-load]
+[3] warning: any page 'juce::WebBrowserComponent' navigates to can use its native integration. Override 'pageAboutToLoad()' to only allow your own pages [juce-unrestricted-webview-navigation]
+[4] warning: 'withNativeIntegrationEnabled()' only works on Windows with the WebView2 backend. Add '.withBackend(juce::WebBrowserComponent::Options::Backend::webview2)' [juce-webview-windows-options]
+[5] warning: 'complete' is never called, so the promise returned to JavaScript never resolves [juce-native-function-completion]
+[6] warning: 'gainRelay' is declared after 'webview' which it's registered with. Declare 'gainRelay' before 'webview' [juce-attachment-order]
+[7] warning: 'bypassRelay' is never registered with a WebBrowserComponent using 'withOptionsFrom()' [juce-unregistered-web-relay]
+```
+
+### Accessibility checks
+
+Various checks for controls and custom components that screen readers can't describe or use.
+
+- [`juce-missing-accessibility-handler`](docs/checks.md#juce-missing-accessibility-handler)
+- [`juce-untitled-control`](docs/checks.md#juce-untitled-control)
+
+```cpp
+class XYPad : public juce::Component // [1]
+{
+public:
+    void mouseDrag(const juce::MouseEvent& event) override;
+};
+
+class Editor : public juce::Component
+{
+public:
+    Editor()
+    {
+        addAndMakeVisible(gainSlider);
+        addAndMakeVisible(bypassButton);
+        addAndMakeVisible(xyPad);
+    }
+
+private:
+    juce::Slider gainSlider{ "Gain" }; // [2]
+    juce::ToggleButton bypassButton;   // [3]
+    XYPad xyPad;
+};
+```
+
+```text
+[1] warning: 'XYPad' handles mouse input but doesn't override 'createAccessibilityHandler()', so screen readers can't tell what it is or interact with it [juce-missing-accessibility-handler]
+[2] warning: 'gainSlider' is never given an accessible title. Call 'setTitle()' so screen readers can announce it [juce-untitled-control]
+[3] warning: 'bypassButton' is never given an accessible title. Call 'setTitle()' or 'setButtonText()' so screen readers can announce it [juce-untitled-control]
+```
+
 ## Building
 
 You should build the plugin locally as it depends on the specific version of Clang-Tidy you use to run the checks. Clang-Tidy is packaged with LLVM so be sure to install or update LLVM with

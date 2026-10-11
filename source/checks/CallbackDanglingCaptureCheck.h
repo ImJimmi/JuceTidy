@@ -23,20 +23,34 @@ namespace clang::tidy::juce
                                                             .bind("callback")));
                 const auto lambda = lambdaExpr().bind("lambda");
 
+                const auto convertedLambda = ignoringImplicit(anyOf(lambda,
+                                                                    cxxConstructExpr(hasArgument(0, ignoringImplicit(lambda)))));
+
                 finder->addMatcher(
                     cxxOperatorCallExpr(unless(isInTemplateInstantiation()),
                                         hasOverloadedOperatorName("="),
                                         hasArgument(0, ignoringParenImpCasts(callback)),
-                                        hasArgument(1,
-                                                    ignoringImplicit(anyOf(lambda,
-                                                                           cxxConstructExpr(hasArgument(0, ignoringImplicit(lambda)))))))
+                                        hasArgument(1, convertedLambda))
                         .bind("assignment"),
+                    this);
+
+                finder->addMatcher(
+                    cxxMemberCallExpr(unless(isInTemplateInstantiation()),
+                                      callee(cxxMethodDecl(anyOf(allOf(hasAnyName("withNativeFunction",
+                                                                                  "withEventListener",
+                                                                                  "withResourceProvider"),
+                                                                       ofClass(hasName("::juce::WebBrowserComponent::Options"))),
+                                                                 allOf(hasName("evaluateJavascript"),
+                                                                       ofClass(hasName("::juce::WebBrowserComponent")))))
+                                                 .bind("registration")),
+                                      hasAnyArgument(convertedLambda)),
                     this);
             }
 
             void check(const ast_matchers::MatchFinder::MatchResult& result) override
             {
                 const auto* callback = result.Nodes.getNodeAs<FieldDecl>("callback");
+                const auto* registration = result.Nodes.getNodeAs<CXXMethodDecl>("registration");
                 const auto* lambda = result.Nodes.getNodeAs<LambdaExpr>("lambda");
 
                 for (const auto& capture : lambda->captures())
@@ -53,12 +67,23 @@ namespace clang::tidy::juce
                         continue;
                     }
 
+                    if (callback != nullptr)
+                    {
+                        diag(capture.getLocation(),
+                             "%0 is a local variable captured by reference which "
+                             "won't exist when %1 is called. Capture by value "
+                             "instead")
+                            << variable
+                            << callback;
+                        continue;
+                    }
+
                     diag(capture.getLocation(),
                          "%0 is a local variable captured by reference which "
-                         "won't exist when %1 is called. Capture by value "
-                         "instead")
+                         "won't exist when the callback passed to %1 is called. "
+                         "Capture by value instead")
                         << variable
-                        << callback;
+                        << registration;
                 }
             }
         };

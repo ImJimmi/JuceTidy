@@ -28,3 +28,21 @@ private:
     juce::Slider slider;
     int count = 0;
 };
+
+juce::WebBrowserComponent::Options createOptions()
+{
+    int counter = 0;
+    juce::String greeting = "Hello";
+
+    return juce::WebBrowserComponent::Options{}
+        .withNativeFunction("count", [&](auto&, auto complete) { complete(++counter); }) // EXPECT_WARNING
+        .withEventListener("greet", [&greeting](juce::var) { (void) greeting; }) // EXPECT_WARNING
+        .withResourceProvider([&](const juce::String&) { (void) greeting; return std::optional<juce::WebBrowserComponent::Resource>{}; }) // EXPECT_WARNING
+        .withNativeFunction("copy", [counter](auto&, auto complete) { complete(counter); });
+}
+
+void evaluate(juce::WebBrowserComponent& browser)
+{
+    int answer = 0;
+    browser.evaluateJavascript("6 * 7", [&answer](juce::WebBrowserComponent::EvaluationResult) { answer = 42; }); // EXPECT_WARNING
+}

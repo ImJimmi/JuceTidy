@@ -8,6 +8,7 @@
 #include <clang/Lex/Lexer.h>
 #include <clang/Lex/PPCallbacks.h>
 #include <llvm/ADT/ArrayRef.h>
+#include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/StringRef.h>
 
 #include <functional>
@@ -74,8 +75,26 @@ DestructorSearch searchDestructor(const CXXRecordDecl& record, const ast_matcher
 std::vector<const Stmt*> getFunctionStatements(const FunctionDecl& function);
 std::optional<std::vector<const Stmt*>> getClassStatements(const CXXRecordDecl& record);
 const FieldDecl* getReferencedField(const Expr& expression);
+bool isOrOwnsAnyOf(QualType type, llvm::ArrayRef<std::string> qualifiedNames);
 bool isComponentOrOwnedComponent(QualType type);
+bool isInJuceNamespace(const NamedDecl& decl);
+const CXXMethodDecl* findAccessibilityHandlerOverride(const CXXRecordDecl& record);
 llvm::ArrayRef<const Expr*> getCallArguments(const Expr& call);
+const StringLiteral* getStringLiteral(const Expr& expression);
+const Stmt* findInnermostLoop(const Stmt& statement, ASTContext& context);
+llvm::SmallPtrSet<const Decl*, 4> getLoopVariables(const Stmt& loop, ASTContext& context);
+bool referencesAny(const Expr& expression, const llvm::SmallPtrSetImpl<const Decl*>& declarations, ASTContext& context);
+
+struct WebBrowserOptionsCalls
+{
+    std::vector<const CXXMemberCallExpr*> calls;
+    bool isComplete = true;
+};
+
+ast_matchers::internal::BindableMatcher<Stmt> webBrowserConstruction();
+const Expr* getWebBrowserOptionsArgument(const Expr& construction);
+WebBrowserOptionsCalls findWebBrowserOptionsCalls(const Expr& options, ASTContext& context);
+llvm::StringRef getMethodName(const CXXMemberCallExpr& call);
 
 class MacroExpansionListener : public PPCallbacks
 {

@@ -61,3 +61,56 @@ void attachmentToExternalSlider(Processor& p, juce::Slider& slider)
 {
     juce::AudioProcessorValueTreeState::SliderAttachment attachment(p.apvts, "gain", slider);
 }
+
+class WebEditor : public juce::AudioProcessorEditor
+{
+public:
+    WebEditor(juce::AudioProcessor& p, juce::RangedAudioParameter& gain, juce::RangedAudioParameter& bypass)
+        : juce::AudioProcessorEditor(p)
+        , gainAttachment(gain, gainRelay)
+        , bypassAttachment(bypass, bypassRelay)
+    {
+    }
+
+private:
+    juce::WebSliderParameterAttachment gainAttachment; // EXPECT_WARNING
+    juce::WebSliderRelay gainRelay{ "gain" };
+    juce::WebBrowserComponent webview{ juce::WebBrowserComponent::Options{}
+                                           .withOptionsFrom(gainRelay)
+                                           .withOptionsFrom(bypassRelay)
+                                           .withOptionsFrom(indexReceiver) };
+    juce::WebToggleButtonRelay bypassRelay{ "bypass" }; // EXPECT_WARNING
+    juce::WebControlParameterIndexReceiver indexReceiver; // EXPECT_WARNING
+    juce::WebToggleButtonParameterAttachment bypassAttachment;
+};
+
+class OwnedBrowser : public juce::Component
+{
+public:
+    OwnedBrowser()
+    {
+        browser = std::make_unique<juce::WebBrowserComponent>(juce::WebBrowserComponent::Options{}.withOptionsFrom(relay));
+    }
+
+private:
+    std::unique_ptr<juce::WebBrowserComponent> browser;
+    juce::WebComboBoxRelay relay{ "mode" }; // EXPECT_WARNING
+};
+
+class CorrectWebOrder : public juce::AudioProcessorEditor
+{
+public:
+    CorrectWebOrder(juce::AudioProcessor& p, juce::RangedAudioParameter& gain)
+        : juce::AudioProcessorEditor(p)
+        , gainAttachment(gain, gainRelay)
+    {
+        owned = std::make_unique<juce::WebBrowserComponent>(juce::WebBrowserComponent::Options{}.withOptionsFrom(modeRelay));
+    }
+
+private:
+    juce::WebSliderRelay gainRelay{ "gain" };
+    juce::WebComboBoxRelay modeRelay{ "mode" };
+    juce::WebBrowserComponent webview{ juce::WebBrowserComponent::Options{}.withOptionsFrom(gainRelay) };
+    std::unique_ptr<juce::WebBrowserComponent> owned;
+    juce::WebSliderParameterAttachment gainAttachment;
+};

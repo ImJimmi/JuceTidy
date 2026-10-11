@@ -2,7 +2,11 @@
 
 #include <clang-tidy/utils/OptionsUtils.h>
 #include <clang/AST/DeclTemplate.h>
+#include <clang/AST/ExprCXX.h>
+#include <clang/AST/StmtCXX.h>
+#include <clang/ASTMatchers/ASTMatchFinder.h>
 #include <llvm/ADT/STLExtras.h>
+#include <llvm/ADT/SmallPtrSet.h>
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/Support/Regex.h>
 
@@ -224,16 +228,45 @@ const FieldDecl* getReferencedField(const Expr& expression)
     return dyn_cast<FieldDecl>(member->getMemberDecl());
 }
 
-bool isComponentOrOwnedComponent(QualType type)
+bool isOrOwnsAnyOf(QualType type, llvm::ArrayRef<std::string> qualifiedNames)
 {
-    static const std::vector<std::string> component{"juce::Component"};
-
-    if (isSameOrDerivedFrom(type->getAsCXXRecordDecl(), component))
+    if (isSameOrDerivedFrom(type->getAsCXXRecordDecl(), qualifiedNames))
         return true;
 
     const auto* specialisation = dyn_cast_or_null<ClassTemplateSpecializationDecl>(type->getAsCXXRecordDecl());
 
-    return specialisation != nullptr && qualifiedName(*specialisation) == "std::unique_ptr" && isSameOrDerivedFrom(specialisation->getTemplateArgs().get(0).getAsType()->getAsCXXRecordDecl(), component);
+    return specialisation != nullptr && qualifiedName(*specialisation) == "std::unique_ptr" && isSameOrDerivedFrom(specialisation->getTemplateArgs().get(0).getAsType()->getAsCXXRecordDecl(), qualifiedNames);
+}
+
+bool isComponentOrOwnedComponent(QualType type)
+{
+    static const std::vector<std::string> component{"juce::Component"};
+
+    return isOrOwnsAnyOf(type, component);
+}
+
+bool isInJuceNamespace(const NamedDecl& decl)
+{
+    return llvm::StringRef{qualifiedName(decl)}.starts_with("juce::");
+}
+
+const CXXMethodDecl* findAccessibilityHandlerOverride(const CXXRecordDecl& record)
+{
+    const auto* definition = record.getDefinition();
+
+    if (definition == nullptr)
+        return nullptr;
+
+    for (const auto* method : definition->methods())
+        if (method->getDeclName().isIdentifier() && method->getName() == "createAccessibilityHandler" && method->size_overridden_methods() > 0)
+            return method;
+
+    for (const auto& base : definition->bases())
+        if (const auto* baseRecord = getRecord(base.getType()))
+            if (const auto* method = findAccessibilityHandlerOverride(*baseRecord))
+                return method;
+
+    return nullptr;
 }
 
 llvm::ArrayRef<const Expr*> getCallArguments(const Expr& call)
@@ -243,6 +276,279 @@ llvm::ArrayRef<const Expr*> getCallArguments(const Expr& call)
 
     const auto& callExpression = cast<CallExpr>(call);
     return {callExpression.getArgs(), callExpression.getNumArgs()};
+}
+
+const StringLiteral* getStringLiteral(const Expr& expression)
+{
+    const auto* current = expression.IgnoreImplicit()->IgnoreParens();
+
+    while (true)
+    {
+        if (const auto* literal = dyn_cast<StringLiteral>(current))
+            return literal;
+
+        if (const auto* cast = dyn_cast<CXXFunctionalCastExpr>(current))
+            current = cast->getSubExpr();
+        else if (const auto* construction = dyn_cast<CXXConstructExpr>(current); construction != nullptr && construction->getNumArgs() == 1)
+            current = construction->getArg(0);
+        else
+            return nullptr;
+
+        current = current->IgnoreImplicit()->IgnoreParens();
+    }
+}
+
+const Stmt* findInnermostLoop(const Stmt& statement, ASTContext& context)
+{
+    auto parents = context.getParents(statement);
+
+    while (!parents.empty())
+    {
+        const auto& parent = *parents.begin();
+
+        if (parent.get<FunctionDecl>() != nullptr || parent.get<LambdaExpr>() != nullptr)
+            return nullptr;
+
+        if (const auto* loop = parent.get<Stmt>(); loop != nullptr && isa<ForStmt, CXXForRangeStmt>(loop))
+            return loop;
+
+        parents = context.getParents(parent);
+    }
+
+    return nullptr;
+}
+
+llvm::SmallPtrSet<const Decl*, 4> getLoopVariables(const Stmt& loop, ASTContext& context)
+{
+    using namespace ast_matchers;
+
+    llvm::SmallPtrSet<const Decl*, 4> variables;
+
+    if (const auto* rangeLoop = dyn_cast<CXXForRangeStmt>(&loop))
+    {
+        variables.insert(rangeLoop->getLoopVariable());
+        return variables;
+    }
+
+    const auto& forLoop = cast<ForStmt>(loop);
+
+    for (const auto* part : {forLoop.getInit(), static_cast<const Stmt*>(forLoop.getInc())})
+    {
+        if (part == nullptr)
+            continue;
+
+        for (const auto& nodes : match(findAll(stmt(anyOf(declStmt(forEach(varDecl().bind("variable"))), declRefExpr(to(varDecl().bind("variable")))))), *part, context))
+            variables.insert(nodes.getNodeAs<VarDecl>("variable"));
+    }
+
+    return variables;
+}
+
+bool referencesAny(const Expr& expression, const llvm::SmallPtrSetImpl<const Decl*>& declarations, ASTContext& context)
+{
+    using namespace ast_matchers;
+
+    return llvm::any_of(match(findAll(declRefExpr().bind("reference")), expression, context),
+                        [&declarations](const BoundNodes& nodes) { return declarations.contains(nodes.getNodeAs<DeclRefExpr>("reference")->getDecl()); });
+}
+
+ast_matchers::internal::BindableMatcher<Stmt> webBrowserConstruction()
+{
+    using namespace ast_matchers;
+
+    const auto browser = hasUnqualifiedDesugaredType(recordType(hasDeclaration(cxxRecordDecl(ast_matchers::isSameOrDerivedFrom(hasName("::juce::WebBrowserComponent"))))));
+
+    return expr(anyOf(cxxConstructExpr(hasType(browser)),
+                      callExpr(callee(functionDecl(hasAnyName("::std::make_unique", "::std::make_shared"),
+                                                   hasTemplateArgument(0, refersToType(browser)))))));
+}
+
+static bool isWebBrowserOptions(const CXXRecordDecl* record)
+{
+    if (record == nullptr)
+        return false;
+
+    const auto name = qualifiedName(*record);
+    return name == "juce::WebBrowserComponent::Options" || name == "juce::WebBrowserComponent::Options::WinWebView2";
+}
+
+const Expr* getWebBrowserOptionsArgument(const Expr& construction)
+{
+    const auto arguments = getCallArguments(construction);
+    const auto* options = llvm::find_if(arguments, [](const Expr* argument)
+                                        {
+        const auto* record = argument->getType()->getAsCXXRecordDecl();
+        return record != nullptr && qualifiedName(*record) == "juce::WebBrowserComponent::Options"; });
+
+    return options != arguments.end() ? *options : nullptr;
+}
+
+llvm::StringRef getMethodName(const CXXMemberCallExpr& call)
+{
+    const auto* method = call.getMethodDecl();
+
+    if (method == nullptr || !method->getDeclName().isIdentifier())
+        return {};
+
+    return method->getName();
+}
+
+namespace
+{
+class WebBrowserOptionsFinder
+{
+public:
+    explicit WebBrowserOptionsFinder(ASTContext& context)
+        : context(context)
+    {
+    }
+
+    WebBrowserOptionsCalls find(const Expr& options)
+    {
+        visit(options);
+        return result;
+    }
+
+private:
+    static const Expr* skipCopies(const Expr& expression)
+    {
+        const auto* current = expression.IgnoreImplicit()->IgnoreParens();
+
+        while (true)
+        {
+            if (const auto* cast = dyn_cast<CXXFunctionalCastExpr>(current))
+                current = cast->getSubExpr();
+            else if (const auto* construction = dyn_cast<CXXConstructExpr>(current); construction != nullptr && construction->getConstructor()->isCopyOrMoveConstructor())
+                current = construction->getArg(0);
+            else if (const auto* call = dyn_cast<CallExpr>(current); call != nullptr && call->isCallToStdMove())
+                current = call->getArg(0);
+            else
+                return current;
+
+            current = current->IgnoreImplicit()->IgnoreParens();
+        }
+    }
+
+    void visit(const Expr& expression)
+    {
+        const auto* current = skipCopies(expression);
+
+        if (const auto* call = dyn_cast<CXXMemberCallExpr>(current); call != nullptr && call->getMethodDecl() != nullptr && isWebBrowserOptions(call->getMethodDecl()->getParent()))
+        {
+            result.calls.push_back(call);
+            visit(*call->getImplicitObjectArgument());
+
+            if (getMethodName(*call) == "withWinWebView2Options" && call->getNumArgs() == 1)
+                visit(*call->getArg(0));
+
+            return;
+        }
+
+        if (const auto* construction = dyn_cast<CXXConstructExpr>(current); construction != nullptr && construction->getNumArgs() == 0)
+            return;
+
+        if (const auto* list = dyn_cast<InitListExpr>(current); list != nullptr && list->getNumInits() == 0)
+            return;
+
+        if (const auto* conditional = dyn_cast<AbstractConditionalOperator>(current))
+        {
+            visit(*conditional->getTrueExpr());
+            visit(*conditional->getFalseExpr());
+            return;
+        }
+
+        if (const auto* reference = dyn_cast<DeclRefExpr>(current))
+        {
+            if (const auto* variable = dyn_cast<VarDecl>(reference->getDecl()); variable != nullptr && !isa<ParmVarDecl>(variable))
+            {
+                visitVariable(*variable);
+                return;
+            }
+        }
+
+        if (const auto* call = dyn_cast<CallExpr>(current))
+        {
+            const FunctionDecl* definition = nullptr;
+            const auto* callee = call->getDirectCallee();
+            const auto* method = dyn_cast_or_null<CXXMethodDecl>(callee);
+
+            if (callee != nullptr && callee->hasBody(definition) && definition != nullptr && (method == nullptr || !method->isVirtual()))
+            {
+                visitFunction(*definition);
+                return;
+            }
+        }
+
+        result.isComplete = false;
+    }
+
+    void visitVariable(const VarDecl& variable)
+    {
+        if (!visited.insert(&variable).second)
+            return;
+
+        if (const auto* initialiser = variable.getInit())
+            visit(*initialiser);
+        else
+            result.isComplete = false;
+
+        const auto* function = dyn_cast_or_null<FunctionDecl>(variable.getParentFunctionOrMethod());
+
+        if (function == nullptr || function->getBody() == nullptr)
+        {
+            if (!variable.getType().isConstQualified())
+                result.isComplete = false;
+
+            return;
+        }
+
+        using namespace ast_matchers;
+
+        const auto reference = ignoringParenImpCasts(declRefExpr(to(varDecl(equalsNode(&variable)))));
+        const auto& body = *function->getBody();
+
+        for (const auto& nodes : match(findAll(cxxOperatorCallExpr(hasOverloadedOperatorName("="),
+                                                                   hasArgument(0, reference),
+                                                                   hasArgument(1, expr().bind("value")))),
+                                       body,
+                                       context))
+        {
+            visit(*nodes.getNodeAs<Expr>("value"));
+        }
+
+        const auto modification = expr(anyOf(callExpr(unless(callee(functionDecl(hasAnyName("::std::move", "::std::forward", "::std::make_unique", "::std::make_shared")))),
+                                                      forEachArgumentWithParam(reference, parmVarDecl(hasType(references(qualType(unless(isConstQualified()))))))),
+                                             unaryOperator(hasOperatorName("&"), hasUnaryOperand(reference))));
+
+        if (!match(findAll(modification), body, context).empty())
+            result.isComplete = false;
+    }
+
+    void visitFunction(const FunctionDecl& function)
+    {
+        if (!visited.insert(&function).second)
+            return;
+
+        using namespace ast_matchers;
+
+        for (const auto& nodes : match(findAll(returnStmt(forCallable(equalsNode(&function)),
+                                                          hasReturnValue(expr().bind("value")))),
+                                       *function.getBody(),
+                                       context))
+        {
+            visit(*nodes.getNodeAs<Expr>("value"));
+        }
+    }
+
+    ASTContext& context;
+    WebBrowserOptionsCalls result;
+    llvm::SmallPtrSet<const Decl*, 8> visited;
+};
+} // namespace
+
+WebBrowserOptionsCalls findWebBrowserOptionsCalls(const Expr& options, ASTContext& context)
+{
+    return WebBrowserOptionsFinder{context}.find(options);
 }
 
 MacroExpansionListener::MacroExpansionListener(std::vector<std::string> macroNames, Callback callback)

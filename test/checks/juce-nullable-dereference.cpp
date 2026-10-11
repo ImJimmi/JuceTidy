@@ -44,3 +44,16 @@ void restoreState(const void* data, int size)
     (void) tree;
     (void) name;
 }
+
+void evaluate(juce::WebBrowserComponent& browser)
+{
+    browser.evaluateJavascript("1 + 1", [](juce::WebBrowserComponent::EvaluationResult result) {
+        const auto value = *result.getResult(); // EXPECT_WARNING
+        (void) value;
+
+        if (const auto* error = result.getError())
+            (void) error->message;
+
+        (void) result.getError()->message; // EXPECT_WARNING
+    });
+}

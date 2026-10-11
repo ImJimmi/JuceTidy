@@ -3,16 +3,20 @@
 Options are set through `CheckOptions` in your `.clang-tidy`, for example `juce-template-parameter-name.MinimumLength: 3`. List options are semicolon-separated, and qualified names may start with `::`.
 
 - [juce-async-this-capture](#juce-async-this-capture)
+- [juce-atomic-in-sample-loop](#juce-atomic-in-sample-loop)
 - [juce-explicit-nullptr-comparison](#juce-explicit-nullptr-comparison)
 - [juce-leak-detector](#juce-leak-detector)
 - [juce-macro-condition-style](#juce-macro-condition-style)
 - [juce-manual-resized-call](#juce-manual-resized-call)
 - [juce-nullable-dereference](#juce-nullable-dereference)
 - [juce-pass-small-objects-by-value](#juce-pass-small-objects-by-value)
+- [juce-plugin-global-state](#juce-plugin-global-state)
 - [juce-realtime-safety](#juce-realtime-safety)
+- [juce-repaint-timer](#juce-repaint-timer)
 - [juce-scoped-no-denormals](#juce-scoped-no-denormals)
 - [juce-std-math-functions](#juce-std-math-functions)
 - [juce-template-parameter-name](#juce-template-parameter-name)
+- [juce-webview-dev-server-in-release](#juce-webview-dev-server-in-release)
 
 ## juce-async-this-capture
 
@@ -20,6 +24,12 @@ Options are set through `CheckOptions` in your `.clang-tidy`, for example `juce-
 | --- | --- |
 | `AsyncFunctions`: functions that call their argument later | `juce::MessageManager::callAsync`, `juce::Timer::callAfterDelay`, `juce::Thread::launch`, `juce::NativeMessageBox::showAsync`, `juce::AlertWindow::showAsync` |
 | `SafePointerTypes`: captures that make `this` safe to use | `juce::Component::SafePointer`, `juce::WeakReference`, `std::weak_ptr` |
+
+## juce-atomic-in-sample-loop
+
+| Option | Default |
+| --- | --- |
+| `AudioCallbacks`: functions that run on the audio thread, including their overrides | `AudioProcessor::processBlock`, `AudioProcessor::processBlockBypassed`, `AudioSource::getNextAudioBlock`, `AudioIODeviceCallback::audioDeviceIOCallbackWithContext`, `SynthesiserVoice::renderNextBlock`, `MPESynthesiserVoice::renderNextBlock`, `dsp::ProcessorBase::process` |
 
 ## juce-explicit-nullptr-comparison
 
@@ -50,13 +60,19 @@ Options are set through `CheckOptions` in your `.clang-tidy`, for example `juce-
 
 | Option | Default |
 | --- | --- |
-| `NullableFunctions`: functions that may return `nullptr` | `AudioProcessor::getPlayHead`, `AudioProcessor::getActiveEditor`, `AudioProcessorValueTreeState::getParameter`, `AudioProcessorValueTreeState::getRawParameterValue`, `Component::getParentComponent`, `Component::findParentComponentOfClass`, `Component::getPeer`, `MessageManager::getInstanceWithoutCreating`, `AudioDeviceManager::getCurrentAudioDevice`, `Displays::getPrimaryDisplay`, `AudioProcessor::getXmlFromBinary`, `parseXML`, `parseXMLIfTagMatches`, `XmlDocument::parse`, `XmlDocument::getDocumentElement`, `ValueTree::createXml` |
+| `NullableFunctions`: functions that may return `nullptr` | `AudioProcessor::getPlayHead`, `AudioProcessor::getActiveEditor`, `AudioProcessorValueTreeState::getParameter`, `AudioProcessorValueTreeState::getRawParameterValue`, `Component::getParentComponent`, `Component::findParentComponentOfClass`, `Component::getPeer`, `MessageManager::getInstanceWithoutCreating`, `AudioDeviceManager::getCurrentAudioDevice`, `Displays::getPrimaryDisplay`, `AudioProcessor::getXmlFromBinary`, `parseXML`, `parseXMLIfTagMatches`, `XmlDocument::parse`, `XmlDocument::getDocumentElement`, `ValueTree::createXml`, `WebBrowserComponent::EvaluationResult::getResult`, `WebBrowserComponent::EvaluationResult::getError` |
 
 ## juce-pass-small-objects-by-value
 
 | Option | Default |
 | --- | --- |
 | `Types`: class names to pass by value | `juce::Point`, `Rectangle`, `Range`, `Colour`, `Time`, `RelativeTime`, `Identifier`, `ModifierKeys`, `Justification`, `PixelRGB`, `PixelARGB`, `PixelAlpha`, `StringRef` and the `CharPointer_*` classes |
+
+## juce-plugin-global-state
+
+| Option | Default |
+| --- | --- |
+| `SingletonMacros`: macros that declare a singleton | `JUCE_DECLARE_SINGLETON;JUCE_DECLARE_SINGLETON_SINGLETHREADED;JUCE_DECLARE_SINGLETON_SINGLETHREADED_MINIMAL;JUCE_DECLARE_SINGLETON_INLINE` |
 
 ## juce-realtime-safety
 
@@ -69,6 +85,12 @@ Options are set through `CheckOptions` in your `.clang-tidy`, for example `juce-
 | `UnsafeFunctions`: extra functions to flag | none |
 | `UnsafeMacros`: macros to flag | `DBG` |
 | `CheckParameterLookups`: flag parameter lookups by ID | `true` |
+
+## juce-repaint-timer
+
+| Option | Default |
+| --- | --- |
+| `MinimumFrequency`: the lowest timer rate, in Hz, to flag | `30` |
 
 ## juce-scoped-no-denormals
 
@@ -87,3 +109,9 @@ Options are set through `CheckOptions` in your `.clang-tidy`, for example `juce-
 | Option | Default |
 | --- | --- |
 | `MinimumLength`: the shortest allowed name | `2` |
+
+## juce-webview-dev-server-in-release
+
+| Option | Default |
+| --- | --- |
+| `DebugMacros`: macros whose `#if` branches are only built for development | `JUCE_DEBUG` |

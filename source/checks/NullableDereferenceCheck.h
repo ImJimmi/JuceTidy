@@ -70,7 +70,9 @@ namespace clang::tidy::juce
                 "::juce::parseXMLIfTagMatches;"
                 "::juce::XmlDocument::parse;"
                 "::juce::XmlDocument::getDocumentElement;"
-                "::juce::ValueTree::createXml";
+                "::juce::ValueTree::createXml;"
+                "::juce::WebBrowserComponent::EvaluationResult::getResult;"
+                "::juce::WebBrowserComponent::EvaluationResult::getError";
 
             const StringRef rawNullableFunctions;
             const std::vector<std::string> nullableFunctions;

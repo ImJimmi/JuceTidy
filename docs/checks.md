@@ -2,15 +2,19 @@
 
 - [juce-apvts-state-access](#juce-apvts-state-access)
 - [juce-async-this-capture](#juce-async-this-capture)
+- [juce-atomic-in-sample-loop](#juce-atomic-in-sample-loop)
 - [juce-attachment-order](#juce-attachment-order)
 - [juce-block-size-assumption](#juce-block-size-assumption)
 - [juce-buffer-pointer-in-sample-loop](#juce-buffer-pointer-in-sample-loop)
+- [juce-buffered-parent](#juce-buffered-parent)
 - [juce-callback-dangling-capture](#juce-callback-dangling-capture)
+- [juce-duplicate-webview-name](#juce-duplicate-webview-name)
 - [juce-expensive-paint](#juce-expensive-paint)
 - [juce-explicit-base-access](#juce-explicit-base-access)
 - [juce-explicit-nullptr-comparison](#juce-explicit-nullptr-comparison)
 - [juce-explicit-unsigned-int](#juce-explicit-unsigned-int)
 - [juce-graphics-save-state](#juce-graphics-save-state)
+- [juce-hardcoded-resource-provider-root](#juce-hardcoded-resource-provider-root)
 - [juce-identifier-from-literal](#juce-identifier-from-literal)
 - [juce-ignore-unused](#juce-ignore-unused)
 - [juce-leak-detector](#juce-leak-detector)
@@ -22,7 +26,9 @@
 - [juce-manual-resized-call](#juce-manual-resized-call)
 - [juce-member-access-order](#juce-member-access-order)
 - [juce-message-manager-lock-unchecked](#juce-message-manager-lock-unchecked)
+- [juce-missing-accessibility-handler](#juce-missing-accessibility-handler)
 - [juce-missing-remove-listener](#juce-missing-remove-listener)
+- [juce-native-function-completion](#juce-native-function-completion)
 - [juce-non-ascii-string-literal](#juce-non-ascii-string-literal)
 - [juce-normalised-parameter-value](#juce-normalised-parameter-value)
 - [juce-nullable-dereference](#juce-nullable-dereference)
@@ -34,12 +40,15 @@
 - [juce-parameter-version-hint](#juce-parameter-version-hint)
 - [juce-pass-small-objects-by-value](#juce-pass-small-objects-by-value)
 - [juce-platform-macros](#juce-platform-macros)
+- [juce-plugin-global-state](#juce-plugin-global-state)
 - [juce-prefer-constexpr](#juce-prefer-constexpr)
 - [juce-prefer-jassert](#juce-prefer-jassert)
 - [juce-prefer-pre-increment](#juce-prefer-pre-increment)
+- [juce-processor-editor-coupling](#juce-processor-editor-coupling)
 - [juce-property-name-case](#juce-property-name-case)
 - [juce-realtime-safety](#juce-realtime-safety)
 - [juce-relative-file-path](#juce-relative-file-path)
+- [juce-repaint-timer](#juce-repaint-timer)
 - [juce-scoped-no-denormals](#juce-scoped-no-denormals)
 - [juce-state-type-check](#juce-state-type-check)
 - [juce-std-math-functions](#juce-std-math-functions)
@@ -53,7 +62,14 @@
 - [juce-unknown-parameter-id](#juce-unknown-parameter-id)
 - [juce-unowned-child-component](#juce-unowned-child-component)
 - [juce-unprepared-dsp](#juce-unprepared-dsp)
+- [juce-unregistered-web-relay](#juce-unregistered-web-relay)
+- [juce-unrestricted-webview-navigation](#juce-unrestricted-webview-navigation)
+- [juce-untitled-control](#juce-untitled-control)
 - [juce-valuetree-identity-comparison](#juce-valuetree-identity-comparison)
+- [juce-webview-dev-server-in-release](#juce-webview-dev-server-in-release)
+- [juce-webview-event-before-load](#juce-webview-event-before-load)
+- [juce-webview-resource-mime-type](#juce-webview-resource-mime-type)
+- [juce-webview-windows-options](#juce-webview-windows-options)
 
 ## juce-apvts-state-access
 
@@ -80,13 +96,34 @@ juce::MessageManager::callAsync([safeThis = juce::Component::SafePointer(this)] 
 
 See [juce-async-this-capture options](options.md#juce-async-this-capture).
 
+## juce-atomic-in-sample-loop
+
+Flags atomics and parameters read on every iteration of a loop in an audio callback, such as `std::atomic::load()` or `juce::AudioParameterFloat::get()`. Each read has a cost that adds up over every sample in the block. Read the value once before the loop instead.
+
+```cpp
+for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+    data[sample] *= gain.load(); // warning
+
+const auto currentGain = gain.load();
+
+for (int sample = 0; sample < buffer.getNumSamples(); ++sample)
+    data[sample] *= currentGain;
+```
+
+Reads that depend on the loop variable, such as `voiceGains[voice].load()`, are allowed.
+
+See [juce-atomic-in-sample-loop options](options.md#juce-atomic-in-sample-loop).
+
 ## juce-attachment-order
 
-Flags parameter attachments declared before the component they're attached to. Members are destroyed in reverse order, so the attachment outlives its component and crashes when it removes its listener.
+Flags parameter attachments declared before the component or web relay they're attached to, and web relays declared after the `WebBrowserComponent` they're registered with. Members are destroyed in reverse order, so the attachment outlives its component and crashes when it removes its listener, and the browser calls back into relays that no longer exist.
 
 ```cpp
 juce::AudioProcessorValueTreeState::SliderAttachment gainAttachment; // warning
 juce::Slider gainSlider;
+
+juce::WebBrowserComponent webview{ juce::WebBrowserComponent::Options{}.withOptionsFrom(cutoffRelay) };
+juce::WebSliderRelay cutoffRelay{ "cutoff" }; // warning
 ```
 
 ## juce-block-size-assumption
@@ -106,9 +143,22 @@ for (int i = 0; i < buffer.getNumSamples(); ++i)
     buffer.getWritePointer(channel)[i] *= gain; // warning
 ```
 
+## juce-buffered-parent
+
+Flags `setBufferedToImage(true)` on a component that also has child components. Whenever a child repaints, the parent has to redraw its cached image too, so the cache saves nothing. Buffer a sibling component that does the drawing instead.
+
+```cpp
+setBufferedToImage(true); // warning
+addAndMakeVisible(foreground);
+
+background.setBufferedToImage(true);
+addAndMakeVisible(background);
+addAndMakeVisible(foreground);
+```
+
 ## juce-callback-dangling-capture
 
-Flags lambdas assigned to callbacks like `onClick` that capture locals by reference. The callback runs after the function returns, when the locals no longer exist.
+Flags lambdas assigned to callbacks like `onClick`, or passed to `WebBrowserComponent` functions like `withNativeFunction` and `evaluateJavascript`, that capture locals by reference. The callback runs after the function returns, when the locals no longer exist.
 
 ```cpp
 int clicks = 0;
@@ -117,14 +167,31 @@ button.onClick = [&] { // warning
 };
 ```
 
+## juce-duplicate-webview-name
+
+Flags native functions registered twice with the same name, and relays of the same type in one class that share a name. JUCE asserts on duplicate native functions and only keeps the last one, and relays that share a name are connected to the same frontend state.
+
+```cpp
+juce::WebSliderRelay gainRelay{ "gain" };
+juce::WebSliderRelay outputRelay{ "gain" }; // warning
+```
+
 ## juce-expensive-paint
 
 Flags expensive work in `paint`, such as loading images, parsing XML or JSON, creating typefaces and file access. It's repeated on every repaint, so do it once and store the result.
+
+It also flags a `juce::Path` or `juce::ColourGradient` built from the same values on every repaint, such as one that doesn't depend on the component's size or state. Build it once and store it as a member.
 
 ```cpp
 void paint(juce::Graphics& g) override
 {
     auto logo = juce::ImageFileFormat::loadFrom(logoFile); // warning
+
+    juce::Path arrow; // warning
+    arrow.startNewSubPath(0.0f, 0.0f);
+    arrow.lineTo(10.0f, 5.0f);
+    arrow.lineTo(0.0f, 10.0f);
+    g.fillPath(arrow);
 }
 ```
 
@@ -162,6 +229,15 @@ Flags `Graphics::saveState()` without a matching `restoreState()`, which leaves 
 ```cpp
 g.saveState(); // warning
 const juce::Graphics::ScopedSaveState state(g);
+```
+
+## juce-hardcoded-resource-provider-root
+
+Flags string literals containing `juce://juce.backend` or `https://juce.backend`. The resource provider root is different on Windows and Android, so use `getResourceProviderRoot()`. Where the literal is used as a `juce::String`, the warning includes a fix.
+
+```cpp
+webview.goToURL("juce://juce.backend/");           // webview.goToURL(juce::WebBrowserComponent::getResourceProviderRoot());
+webview.goToURL("juce://juce.backend/index.html"); // webview.goToURL(juce::WebBrowserComponent::getResourceProviderRoot() + "index.html");
 ```
 
 ## juce-identifier-from-literal
@@ -295,6 +371,18 @@ if (!lock.lockWasGained())
     return;
 ```
 
+## juce-missing-accessibility-handler
+
+Flags components that override `mouseDown`, `mouseUp`, `mouseDrag` or `mouseDoubleClick` but don't override `createAccessibilityHandler()`. The default handler has no role, value or actions, so screen readers can't tell what the component is or interact with it. Components that inherit a handler, such as `Slider` subclasses, and components hidden with `setAccessible(false)` are ignored.
+
+```cpp
+class XYPad : public juce::Component // warning
+{
+public:
+    void mouseDrag(const juce::MouseEvent& event) override;
+};
+```
+
 ## juce-missing-remove-listener
 
 Flags `add…Listener(this)` on an object the class doesn't own when the destructor never calls the matching `remove…Listener`. Otherwise the broadcaster can call a destroyed object.
@@ -306,6 +394,16 @@ Editor(Processor& p)
 }
 
 ~Editor() override {}
+```
+
+## juce-native-function-completion
+
+Flags native functions that never call their completion. The completion resolves the promise returned to JavaScript, so without it the call never finishes.
+
+```cpp
+options.withNativeFunction("save", [](auto& args, auto complete) { // warning
+    save(args[0]);
+});
 ```
 
 ## juce-non-ascii-string-literal
@@ -416,6 +514,22 @@ Flags compiler and platform macros like `_WIN32` and `NDEBUG` where JUCE has an 
 #ifndef NDEBUG // warning: use '#if JUCE_DEBUG'
 ```
 
+## juce-plugin-global-state
+
+Flags singletons declared with `JUCE_DECLARE_SINGLETON`, and mutable static data members and static local variables. Depending on the host, plugin instances may or may not share a process, so state like this may or may not be shared between them, and `thread_local` doesn't help. Store the state per instance, or use a `juce::SharedResourcePointer` if it really should be shared.
+
+```cpp
+juce::String getPluginName()
+{
+    static juce::String name; // warning
+    return name;
+}
+```
+
+Global variables at namespace scope aren't flagged, as `cppcoreguidelines-avoid-non-const-global-variables` already covers them. Disable this check for apps, where there's only ever one instance.
+
+See [juce-plugin-global-state options](options.md#juce-plugin-global-state).
+
 ## juce-prefer-constexpr
 
 Flags `const` variables initialised with a constant expression. The JUCE coding standards say compile-time constants should be `constexpr`.
@@ -440,6 +554,28 @@ Flags `i++` and `i--` when the result isn't used. The JUCE coding standards say 
 ```cpp
 for (int i = 0; i < size; i++) // ++i
 ```
+
+## juce-processor-editor-coupling
+
+Flags processors that call into their editor with `getActiveEditor()`, and editors that give the processor a lambda capturing `this`, or a pointer to themselves. There may be no editor, or several, and the editor can be destroyed while the processor still holds on to it. Have the editor read the processor's state instead, for example from a `juce::Timer` or a listener.
+
+```cpp
+void Processor::loadPreset()
+{
+    if (auto* editor = getActiveEditor()) // warning
+        editor->repaint();
+}
+
+Editor::Editor(Processor& p)
+    : juce::AudioProcessorEditor{ p }
+{
+    p.onPresetLoaded = [this] { // warning
+        repaint();
+    };
+}
+```
+
+Assignments that are reset in the editor's destructor are allowed.
 
 ## juce-property-name-case
 
@@ -481,6 +617,26 @@ Flags a `juce::File` created from a relative path literal. JUCE asserts, as the 
 ```cpp
 juce::File presets("Presets/Default.xml"); // warning
 ```
+
+## juce-repaint-timer
+
+Flags `timerCallback()` overrides that only call `repaint()` on a timer running at 30Hz or more. A `juce::Timer` doesn't run in time with the display, so use a `juce::VBlankAttachment` to repaint on every frame instead.
+
+```cpp
+Meter()
+{
+    startTimerHz(60);
+}
+
+void timerCallback() override // warning
+{
+    repaint();
+}
+
+juce::VBlankAttachment vBlank{ this, [this] { repaint(); } };
+```
+
+See [juce-repaint-timer options](options.md#juce-repaint-timer).
 
 ## juce-scoped-no-denormals
 
@@ -610,6 +766,43 @@ Flags `SmoothedValue`, `juce::dsp` processors, `Oversampling`, `ADSR` and `Rever
 juce::dsp::Gain<float> gain; // warning if gain.prepare(spec) is never called
 ```
 
+## juce-unregistered-web-relay
+
+Flags `WebSliderRelay`, `WebToggleButtonRelay`, `WebComboBoxRelay` and `WebControlParameterIndexReceiver` members that are never passed to `withOptionsFrom`. They're never connected to the browser, so the frontend never receives their state.
+
+```cpp
+juce::WebSliderRelay gainRelay{ "gain" }; // warning if nothing calls withOptionsFrom(gainRelay)
+```
+
+## juce-unrestricted-webview-navigation
+
+Flags a `WebBrowserComponent` with native integration enabled whose class doesn't override `pageAboutToLoad`. Any page it navigates to, such as through a link, can then call your native functions, so only allow your own pages.
+
+```cpp
+class SinglePageBrowser : public juce::WebBrowserComponent
+{
+public:
+    using juce::WebBrowserComponent::WebBrowserComponent;
+
+    bool pageAboutToLoad(const juce::String& url) override
+    {
+        return url == getResourceProviderRoot();
+    }
+};
+```
+
+## juce-untitled-control
+
+Flags `Button`, `ComboBox`, `Slider` and `TextEditor` members that are never given a title with `setTitle()`, so screen readers announce them without saying what they control. Buttons can use their button text instead, set with `setButtonText()` or the constructor. A component's name, such as the one passed to `juce::Slider`'s constructor, isn't announced.
+
+Members of your own subclasses of these controls are checked too, unless the subclass gives itself a title, by calling `setTitle()` or `setButtonText()` on itself or passing text to a button base class's constructor. Members passed to your own functions are assumed to be given a title there.
+
+```cpp
+juce::Slider gainSlider; // warning if 'gainSlider.setTitle()' is never called
+juce::Slider cutoffSlider{ "Cutoff" }; // warning; the name isn't the title
+juce::TextButton bypassButton{ "Bypass" };
+```
+
 ## juce-valuetree-identity-comparison
 
 Flags `==` and `!=` between a `ValueTree` and a newly created one. `==` compares identity, not contents, so it's always `false`. Use `isEquivalentTo`.
@@ -617,4 +810,50 @@ Flags `==` and `!=` between a `ValueTree` and a newly created one. `==` compares
 ```cpp
 if (state == juce::ValueTree::fromXml(*xml)) // warning
 if (state.isEquivalentTo(juce::ValueTree::fromXml(*xml)))
+```
+
+## juce-webview-dev-server-in-release
+
+Flags local development servers like `http://localhost:3000` passed to `goToURL` or allowed by `pageAboutToLoad`, and allowed origins passed to `withResourceProvider`, unless they're inside `#if JUCE_DEBUG`. JUCE warns that allowing other origins is a security risk in released builds.
+
+```cpp
+options.withResourceProvider(provide, juce::URL{ "http://localhost:3000" }.getOrigin()); // warning
+
+#if JUCE_DEBUG
+webview.goToURL("http://localhost:3000/");
+#endif
+```
+
+See [juce-webview-dev-server-in-release options](options.md#juce-webview-dev-server-in-release).
+
+## juce-webview-event-before-load
+
+Flags `emitEventIfBrowserIsVisible` and `evaluateJavascript` called on a browser while the object that owns it is being constructed. The page can't have loaded yet, so the frontend misses the event and the script doesn't run in the page. Pass initial state with `withInitialisationData` instead, and run scripts with `withUserScript`.
+
+```cpp
+Editor()
+{
+    webview.emitEventIfBrowserIsVisible("ready", true); // warning
+}
+```
+
+## juce-webview-resource-mime-type
+
+Flags `WebBrowserComponent::Resource`s without a MIME type. Browsers won't run module scripts, like the ones Vite builds, unless they have a JavaScript MIME type.
+
+```cpp
+return juce::WebBrowserComponent::Resource{ .data = bytes }; // warning
+return juce::WebBrowserComponent::Resource{ .data = bytes, .mimeType = "text/javascript" };
+```
+
+## juce-webview-windows-options
+
+Flags options that use native integration, user scripts, a resource provider or relays without choosing the WebView2 backend, and the WebView2 backend without a user data folder. On Windows, JUCE otherwise falls back to Internet Explorer, which supports none of them, and WebView2 can fail if it can't write to the default folder next to the executable. Neither problem shows up on macOS.
+
+```cpp
+juce::WebBrowserComponent::Options{}
+    .withBackend(juce::WebBrowserComponent::Options::Backend::webview2)
+    .withWinWebView2Options(juce::WebBrowserComponent::Options::WinWebView2{}
+                                .withUserDataFolder(juce::File::getSpecialLocation(juce::File::tempDirectory)))
+    .withNativeIntegrationEnabled();
 ```

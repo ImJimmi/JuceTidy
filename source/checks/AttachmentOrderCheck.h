@@ -23,7 +23,10 @@ namespace clang::tidy::juce
                                                                  "::juce::AudioProcessorValueTreeState::ComboBoxAttachment",
                                                                  "::juce::SliderParameterAttachment",
                                                                  "::juce::ButtonParameterAttachment",
-                                                                 "::juce::ComboBoxParameterAttachment"));
+                                                                 "::juce::ComboBoxParameterAttachment",
+                                                                 "::juce::WebSliderParameterAttachment",
+                                                                 "::juce::WebToggleButtonParameterAttachment",
+                                                                 "::juce::WebComboBoxParameterAttachment"));
 
                 finder->addMatcher(
                     expr(unless(isInTemplateInstantiation()),
@@ -33,10 +36,22 @@ namespace clang::tidy::juce
                                                                                 refersToType(hasUnqualifiedDesugaredType(recordType(hasDeclaration(attachment))))))))))
                         .bind("construction"),
                     this);
+
+                finder->addMatcher(
+                    expr(unless(isInTemplateInstantiation()),
+                         utils::webBrowserConstruction())
+                        .bind("browser"),
+                    this);
             }
 
             void check(const ast_matchers::MatchFinder::MatchResult& result) override
             {
+                if (const auto* browser = result.Nodes.getNodeAs<Expr>("browser"))
+                {
+                    checkRegisteredBuilders(*browser, *result.Context);
+                    return;
+                }
+
                 const auto* construction = result.Nodes.getNodeAs<Expr>("construction");
                 const auto* component = findAttachedComponent(*construction);
                 const auto* attachment = component != nullptr
@@ -63,14 +78,63 @@ namespace clang::tidy::juce
             }
 
         private:
+            void checkRegisteredBuilders(const Expr& construction, ASTContext& context)
+            {
+                using namespace clang::ast_matchers;
+
+                const auto* browser = findStoringField(construction, context);
+
+                if (browser == nullptr)
+                    return;
+
+                for (const auto& nodes : match(findAll(cxxMemberCallExpr(callee(cxxMethodDecl(hasName("withOptionsFrom"),
+                                                                                              ofClass(hasName("::juce::WebBrowserComponent::Options")))))
+                                                           .bind("registration")),
+                                               construction,
+                                               context))
+                {
+                    const auto* registration = nodes.getNodeAs<CXXMemberCallExpr>("registration");
+                    const auto* builder = registration->getNumArgs() == 1
+                                            ? utils::getReferencedField(*registration->getArg(0))
+                                            : nullptr;
+
+                    if (builder == nullptr
+                        || builder->getParent() != browser->getParent()
+                        || builder->getFieldIndex() < browser->getFieldIndex())
+                    {
+                        continue;
+                    }
+
+                    diag(builder->getLocation(),
+                         "%0 is declared after %1 which it's registered with. "
+                         "Declare %0 before %1")
+                        << builder
+                        << browser;
+
+                    diag(registration->getExprLoc(),
+                         "%0 is registered with %1 here",
+                         DiagnosticIDs::Note)
+                        << builder
+                        << browser;
+                }
+            }
+
             [[nodiscard]] static const FieldDecl* findAttachedComponent(const Expr& construction)
             {
+                static const std::vector<std::string> relays{
+                    "juce::WebSliderRelay",
+                    "juce::WebToggleButtonRelay",
+                    "juce::WebComboBoxRelay",
+                };
+
                 const auto arguments = utils::getCallArguments(construction);
 
                 for (const auto* argument : arguments)
                 {
                     if (const auto* field = utils::getReferencedField(*argument);
-                        field != nullptr && utils::isComponentOrOwnedComponent(field->getType()))
+                        field != nullptr
+                        && (utils::isComponentOrOwnedComponent(field->getType())
+                            || utils::isOrOwnsAnyOf(field->getType(), relays)))
                     {
                         return field;
                     }

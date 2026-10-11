@@ -6,9 +6,11 @@
 
 #include <atomic>
 #include <cmath>
+#include <cstddef>
 #include <cstdlib>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -121,6 +123,8 @@ public:
     String substring (int startIndex) const;
     std::string toStdString() const;
     bool equalsIgnoreCase (StringRef other) const noexcept;
+    bool startsWith (StringRef text) const noexcept;
+    String dropLastCharacters (int numberToDrop) const;
     String toUpperCase() const;
     String replace (StringRef stringToReplace, StringRef stringToInsertInstead, bool ignoreCase = false) const;
 
@@ -238,6 +242,7 @@ public:
     void clear();
     int size() const noexcept;
     ElementType& getReference (int index) noexcept;
+    ElementType operator[] (int index) const;
 };
 
 template <typename ObjectClass>
@@ -265,6 +270,7 @@ class var
 public:
     var() noexcept;
     var (int);
+    var (const char*);
     var (const String&);
 };
 
@@ -434,12 +440,38 @@ public:
 class File
 {
 public:
+    enum SpecialLocationType
+    {
+        userHomeDirectory,
+        userApplicationDataDirectory,
+        tempDirectory,
+        currentApplicationFile
+    };
+
     File() = default;
     File (const String& absolutePath);
     bool exists() const;
     File getChildFile (StringRef relativeOrAbsolutePath) const;
     static File getCurrentWorkingDirectory();
+    static File getSpecialLocation (const SpecialLocationType type);
     bool replaceWithText (const String& text) const;
+};
+
+class StringArray;
+
+class URL
+{
+public:
+    explicit URL (const String& url);
+    String getOrigin() const;
+};
+
+template <typename OptionsType>
+class OptionsBuilder
+{
+public:
+    virtual ~OptionsBuilder() = default;
+    virtual OptionsType buildOptions (const OptionsType& initialOptions) = 0;
 };
 
 class MessageManager
@@ -494,6 +526,7 @@ public:
     virtual ~Timer();
     virtual void timerCallback() = 0;
     void startTimer (int intervalInMilliseconds) noexcept;
+    void startTimerHz (int timerFrequencyHz) noexcept;
     void stopTimer() noexcept;
     static void callAfterDelay (int milliseconds, std::function<void()> functionToCall);
 };
@@ -560,10 +593,29 @@ public:
     static std::unique_ptr<Drawable> createFromImageData (const void* data, size_t numBytes);
 };
 
+class Path
+{
+public:
+    void startNewSubPath (float startX, float startY);
+    void lineTo (float endX, float endY);
+    void closeSubPath();
+    void addRoundedRectangle (float x, float y, float width, float height, float cornerSize);
+};
+
+class ColourGradient
+{
+public:
+    ColourGradient() noexcept;
+    ColourGradient (Colour colour1, float x1, float y1, Colour colour2, float x2, float y2, bool isRadial);
+    static ColourGradient vertical (Colour colour1, float y1, Colour colour2, float y2);
+};
+
 class Graphics
 {
 public:
     void fillAll (Colour) const;
+    void fillPath (const Path& path) const;
+    void setGradientFill (const ColourGradient& gradient);
     void fillAll() const;
     void fillRect (Rectangle<int> area) const;
     void setColour (Colour newColour);
@@ -595,6 +647,17 @@ class LookAndFeel_V4 : public LookAndFeel
 };
 
 class ComponentListener;
+class Component;
+
+class AccessibilityHandler
+{
+public:
+    virtual ~AccessibilityHandler();
+};
+
+class KeyPress
+{
+};
 
 class Component
 {
@@ -609,6 +672,12 @@ public:
     virtual void resized();
     virtual void paintOverChildren (Graphics&);
     virtual void mouseDown (const MouseEvent&);
+    virtual void mouseUp (const MouseEvent&);
+    virtual void mouseDrag (const MouseEvent&);
+    virtual void mouseEnter (const MouseEvent&);
+    virtual void mouseDoubleClick (const MouseEvent&);
+    virtual bool keyPressed (const KeyPress&);
+    virtual std::unique_ptr<AccessibilityHandler> createAccessibilityHandler();
 
     void addAndMakeVisible (Component* child, int zOrder = -1);
     void addAndMakeVisible (Component& child, int zOrder = -1);
@@ -625,11 +694,19 @@ public:
     void setTopLeftPosition (int x, int y);
     void setVisible (bool shouldBeVisible);
     void setOpaque (bool shouldBeOpaque);
+    void setBufferedToImage (bool shouldBeBuffered);
     void toFront (bool shouldAlsoGainKeyboardFocus);
     void addToDesktop (int windowStyleFlags, void* nativeWindowToAttachTo = nullptr);
     Rectangle<int> getLocalBounds() const noexcept;
     int getWidth() const noexcept;
     int getHeight() const noexcept;
+
+    void setName (const String& newName);
+    void setTitle (const String& newTitle);
+    void setDescription (const String& newDescription);
+    void setHelpText (const String& newHelpText);
+    void setAccessible (bool shouldBeAccessible);
+    void setWantsKeyboardFocus (bool wantsFocus) noexcept;
 
     Component* getParentComponent() const noexcept;
     void addComponentListener (ComponentListener* listener);
@@ -652,6 +729,12 @@ public:
     };
 };
 
+class VBlankAttachment
+{
+public:
+    VBlankAttachment (Component* c, std::function<void()> callback);
+};
+
 class ComponentListener
 {
 public:
@@ -671,6 +754,8 @@ public:
 
     void addListener (Listener* listener);
     void removeListener (Listener* listener);
+    void setButtonText (const String& newText);
+    std::unique_ptr<AccessibilityHandler> createAccessibilityHandler() override;
 
     std::function<void()> onClick;
 };
@@ -685,6 +770,9 @@ public:
 class Slider : public Component
 {
 public:
+    Slider();
+    explicit Slider (const String& componentName);
+
     class Listener
     {
     public:
@@ -697,6 +785,8 @@ public:
     double getValue() const;
     void paint (Graphics&) override;
     void resized() override;
+    void mouseDown (const MouseEvent&) override;
+    std::unique_ptr<AccessibilityHandler> createAccessibilityHandler() override;
 
     std::function<void()> onValueChange;
 };
@@ -705,18 +795,36 @@ class Label : public Component
 {
 public:
     Label();
+    std::unique_ptr<AccessibilityHandler> createAccessibilityHandler() override;
 };
 
 class ToggleButton : public Button
 {
 public:
     ToggleButton();
+    explicit ToggleButton (const String& buttonText);
+};
+
+class ImageButton : public Button
+{
+public:
+    explicit ImageButton (const String& name = String());
 };
 
 class ComboBox : public Component
 {
 public:
+    explicit ComboBox (const String& componentName = {});
+    std::unique_ptr<AccessibilityHandler> createAccessibilityHandler() override;
+
     std::function<void()> onChange;
+};
+
+class TextEditor : public Component
+{
+public:
+    explicit TextEditor (const String& componentName = String());
+    std::unique_ptr<AccessibilityHandler> createAccessibilityHandler() override;
 };
 
 class Viewport : public Component
@@ -783,6 +891,153 @@ class NativeMessageBox
 {
 public:
     static void showAsync (const String& message, std::function<void (int)> callback);
+};
+
+class WebBrowserComponent;
+
+class WebViewLifetimeListener
+{
+public:
+    virtual ~WebViewLifetimeListener() = default;
+    virtual void webViewConstructed (WebBrowserComponent*) = 0;
+    virtual void webViewDestructed (WebBrowserComponent*) = 0;
+};
+
+class WebBrowserComponent : public Component
+{
+public:
+    using NativeEventListener = std::function<void (var)>;
+    using NativeFunctionCompletion = std::function<void (var)>;
+    using NativeFunction = std::function<void (const Array<var>&, NativeFunctionCompletion)>;
+
+    struct Resource
+    {
+        std::vector<std::byte> data;
+        String mimeType;
+    };
+
+    using ResourceProvider = std::function<std::optional<Resource> (const String&)>;
+
+    class Options
+    {
+    public:
+        enum class Backend
+        {
+            defaultBackend,
+            ie,
+            webview2
+        };
+
+        class WinWebView2
+        {
+        public:
+            [[nodiscard]] WinWebView2 withDLLLocation (const File& location) const;
+            [[nodiscard]] WinWebView2 withUserDataFolder (const File& folder) const;
+            [[nodiscard]] WinWebView2 withStatusBarDisabled() const;
+            [[nodiscard]] WinWebView2 withBuiltInErrorPageDisabled() const;
+
+        private:
+            bool disableStatusBar = false;
+        };
+
+        [[nodiscard]] Options withBackend (Backend backend) const;
+        [[nodiscard]] Options withKeepPageLoadedWhenBrowserIsHidden() const;
+        [[nodiscard]] Options withUserAgent (String ua) const;
+        [[nodiscard]] Options withWinWebView2Options (const WinWebView2& winWebView2Options) const;
+        [[nodiscard]] Options withNativeIntegrationEnabled (bool enabled = true) const;
+        [[nodiscard]] Options withNativeFunction (const Identifier& name, NativeFunction callback) const;
+        [[nodiscard]] Options withEventListener (const Identifier& eventId, NativeEventListener listener) const;
+        [[nodiscard]] Options withUserScript (StringRef script) const;
+        [[nodiscard]] Options withInitialisationData (StringRef name, const var& value) const;
+        [[nodiscard]] Options withResourceProvider (ResourceProvider provider, std::optional<String> allowedOriginIn = std::nullopt) const;
+        [[nodiscard]] Options withWebViewLifetimeListener (WebViewLifetimeListener* listener);
+
+        template <typename OptionsType>
+        OptionsType withOptionsFrom (OptionsBuilder<OptionsType>& builder) const
+        {
+            return builder.buildOptions (static_cast<const OptionsType&> (*this));
+        }
+
+    private:
+        bool enableNativeIntegration = false;
+    };
+
+    class EvaluationResult
+    {
+    public:
+        struct Error
+        {
+            String message;
+        };
+
+        EvaluationResult (const var& result);
+        EvaluationResult (const Error& error);
+
+        const var* getResult() const;
+        const Error* getError() const;
+    };
+
+    using EvaluationCallback = std::function<void (EvaluationResult)>;
+
+    WebBrowserComponent();
+    explicit WebBrowserComponent (const Options& options);
+    ~WebBrowserComponent() override;
+
+    void goToURL (const String& url, const StringArray* headers = nullptr, const MemoryBlock* postData = nullptr);
+    static const String& getResourceProviderRoot();
+    void evaluateJavascript (const String& script, EvaluationCallback callback = nullptr);
+    void emitEventIfBrowserIsVisible (const Identifier& eventId, const var& object);
+
+    virtual bool pageAboutToLoad (const String& newURL);
+    virtual void pageFinishedLoading (const String& url);
+    virtual bool pageLoadHadNetworkError (const String& errorInfo);
+};
+
+class WebSliderRelay : public OptionsBuilder<WebBrowserComponent::Options>,
+                       private WebViewLifetimeListener
+{
+public:
+    WebSliderRelay (StringRef nameIn);
+    void setValue (float newValue);
+    float getValue() const;
+    WebBrowserComponent::Options buildOptions (const WebBrowserComponent::Options& initialOptions) override;
+
+private:
+    void webViewConstructed (WebBrowserComponent*) override;
+    void webViewDestructed (WebBrowserComponent*) override;
+};
+
+class WebToggleButtonRelay : public OptionsBuilder<WebBrowserComponent::Options>,
+                             private WebViewLifetimeListener
+{
+public:
+    WebToggleButtonRelay (StringRef nameIn);
+    void setToggleState (bool newState);
+    WebBrowserComponent::Options buildOptions (const WebBrowserComponent::Options& initialOptions) override;
+
+private:
+    void webViewConstructed (WebBrowserComponent*) override;
+    void webViewDestructed (WebBrowserComponent*) override;
+};
+
+class WebComboBoxRelay : public OptionsBuilder<WebBrowserComponent::Options>,
+                         private WebViewLifetimeListener
+{
+public:
+    WebComboBoxRelay (StringRef nameIn);
+    void setValue (float newValue);
+    WebBrowserComponent::Options buildOptions (const WebBrowserComponent::Options& initialOptions) override;
+
+private:
+    void webViewConstructed (WebBrowserComponent*) override;
+    void webViewDestructed (WebBrowserComponent*) override;
+};
+
+class WebControlParameterIndexReceiver : public OptionsBuilder<WebBrowserComponent::Options>
+{
+public:
+    int getControlParameterIndex() const;
+    WebBrowserComponent::Options buildOptions (const WebBrowserComponent::Options& initialOptions) override;
 };
 
 //==============================================================================
@@ -993,6 +1248,7 @@ public:
                          float maxValue,
                          float defaultValue);
     float get() const noexcept;
+    operator float() const noexcept;
 
 protected:
     virtual void valueChanged (float newValue);
@@ -1114,6 +1370,27 @@ public:
     ~SliderParameterAttachment();
 };
 
+class WebSliderParameterAttachment
+{
+public:
+    WebSliderParameterAttachment (RangedAudioParameter& parameterIn, WebSliderRelay& sliderStateIn, UndoManager* undoManager = nullptr);
+    ~WebSliderParameterAttachment();
+};
+
+class WebToggleButtonParameterAttachment
+{
+public:
+    WebToggleButtonParameterAttachment (RangedAudioParameter& parameterIn, WebToggleButtonRelay& button, UndoManager* undoManager = nullptr);
+    ~WebToggleButtonParameterAttachment();
+};
+
+class WebComboBoxParameterAttachment
+{
+public:
+    WebComboBoxParameterAttachment (RangedAudioParameter& parameterIn, WebComboBoxRelay& combo, UndoManager* undoManager = nullptr);
+    ~WebComboBoxParameterAttachment();
+};
+
 class TimeSliceClient
 {
 public:
@@ -1168,7 +1445,19 @@ public:
     void addAudioCallback (AudioIODeviceCallback* newCallback);
     void removeAudioCallback (AudioIODeviceCallback* callback);
 };
+template <typename Type, typename MutexType, bool onlyCreateOncePerRun>
+struct SingletonHolder
+{
+    Type* get();
+};
 } // namespace juce
+
+#define JUCE_DECLARE_SINGLETON(Classname, doNotRecreateAfterDeletion)                                       \
+    static juce::SingletonHolder<Classname, juce::CriticalSection, doNotRecreateAfterDeletion> singletonHolder; \
+    static Classname* getInstance() { return singletonHolder.get(); }
+
+#define JUCE_IMPLEMENT_SINGLETON(Classname) \
+    decltype (Classname::singletonHolder) Classname::singletonHolder;
 
 #define JUCE_DECLARE_NON_COPYABLE(className) \
     className (const className&) = delete;   \

@@ -1,14 +1,18 @@
 #include "checks/ApvtsStateAccessCheck.h"
 #include "checks/AsyncThisCaptureCheck.h"
+#include "checks/AtomicInSampleLoopCheck.h"
 #include "checks/AttachmentOrderCheck.h"
 #include "checks/BlockSizeAssumptionCheck.h"
 #include "checks/BufferPointerInSampleLoopCheck.h"
+#include "checks/BufferedParentCheck.h"
 #include "checks/CallbackDanglingCaptureCheck.h"
+#include "checks/DuplicateWebviewNameCheck.h"
 #include "checks/ExpensivePaintCheck.h"
 #include "checks/ExplicitBaseAccessCheck.h"
 #include "checks/ExplicitNullptrComparisonCheck.h"
 #include "checks/ExplicitUnsignedIntCheck.h"
 #include "checks/GraphicsSaveStateCheck.h"
+#include "checks/HardcodedResourceProviderRootCheck.h"
 #include "checks/IdentifierFromLiteralCheck.h"
 #include "checks/IgnoreUnusedCheck.h"
 #include "checks/LeakDetectorCheck.h"
@@ -20,7 +24,9 @@
 #include "checks/ManualResizedCallCheck.h"
 #include "checks/MemberAccessOrderCheck.h"
 #include "checks/MessageManagerLockUncheckedCheck.h"
+#include "checks/MissingAccessibilityHandlerCheck.h"
 #include "checks/MissingRemoveListenerCheck.h"
+#include "checks/NativeFunctionCompletionCheck.h"
 #include "checks/NonAsciiStringLiteralCheck.h"
 #include "checks/NormalisedParameterValueCheck.h"
 #include "checks/NullableDereferenceCheck.h"
@@ -32,12 +38,15 @@
 #include "checks/ParameterVersionHintCheck.h"
 #include "checks/PassSmallObjectsByValueCheck.h"
 #include "checks/PlatformMacrosCheck.h"
+#include "checks/PluginGlobalStateCheck.h"
 #include "checks/PreferConstexprCheck.h"
 #include "checks/PreferJassertCheck.h"
 #include "checks/PreferPreIncrementCheck.h"
+#include "checks/ProcessorEditorCouplingCheck.h"
 #include "checks/PropertyNameCaseCheck.h"
 #include "checks/RealtimeSafetyCheck.h"
 #include "checks/RelativeFilePathCheck.h"
+#include "checks/RepaintTimerCheck.h"
 #include "checks/ScopedNoDenormalsCheck.h"
 #include "checks/StateTypeCheck.h"
 #include "checks/StdMathFunctionsCheck.h"
@@ -51,7 +60,14 @@
 #include "checks/UnknownParameterIdCheck.h"
 #include "checks/UnownedChildComponentCheck.h"
 #include "checks/UnpreparedDspCheck.h"
+#include "checks/UnregisteredWebRelayCheck.h"
+#include "checks/UnrestrictedWebviewNavigationCheck.h"
+#include "checks/UntitledControlCheck.h"
 #include "checks/ValuetreeIdentityComparisonCheck.h"
+#include "checks/WebviewDevServerInReleaseCheck.h"
+#include "checks/WebviewEventBeforeLoadCheck.h"
+#include "checks/WebviewResourceMimeTypeCheck.h"
+#include "checks/WebviewWindowsOptionsCheck.h"
 
 #include <clang-tidy/ClangTidyModule.h>
 
@@ -66,15 +82,19 @@ public:
     {
         factories.registerCheck<ApvtsStateAccessCheck>("juce-apvts-state-access");
         factories.registerCheck<AsyncThisCaptureCheck>("juce-async-this-capture");
+        factories.registerCheck<AtomicInSampleLoopCheck>("juce-atomic-in-sample-loop");
         factories.registerCheck<AttachmentOrderCheck>("juce-attachment-order");
         factories.registerCheck<BlockSizeAssumptionCheck>("juce-block-size-assumption");
         factories.registerCheck<BufferPointerInSampleLoopCheck>("juce-buffer-pointer-in-sample-loop");
+        factories.registerCheck<BufferedParentCheck>("juce-buffered-parent");
         factories.registerCheck<CallbackDanglingCaptureCheck>("juce-callback-dangling-capture");
+        factories.registerCheck<DuplicateWebviewNameCheck>("juce-duplicate-webview-name");
         factories.registerCheck<ExpensivePaintCheck>("juce-expensive-paint");
         factories.registerCheck<ExplicitBaseAccessCheck>("juce-explicit-base-access");
         factories.registerCheck<ExplicitNullptrComparisonCheck>("juce-explicit-nullptr-comparison");
         factories.registerCheck<ExplicitUnsignedIntCheck>("juce-explicit-unsigned-int");
         factories.registerCheck<GraphicsSaveStateCheck>("juce-graphics-save-state");
+        factories.registerCheck<HardcodedResourceProviderRootCheck>("juce-hardcoded-resource-provider-root");
         factories.registerCheck<IdentifierFromLiteralCheck>("juce-identifier-from-literal");
         factories.registerCheck<IgnoreUnusedCheck>("juce-ignore-unused");
         factories.registerCheck<LeakDetectorCheck>("juce-leak-detector");
@@ -86,7 +106,9 @@ public:
         factories.registerCheck<ManualResizedCallCheck>("juce-manual-resized-call");
         factories.registerCheck<MemberAccessOrderCheck>("juce-member-access-order");
         factories.registerCheck<MessageManagerLockUncheckedCheck>("juce-message-manager-lock-unchecked");
+        factories.registerCheck<MissingAccessibilityHandlerCheck>("juce-missing-accessibility-handler");
         factories.registerCheck<MissingRemoveListenerCheck>("juce-missing-remove-listener");
+        factories.registerCheck<NativeFunctionCompletionCheck>("juce-native-function-completion");
         factories.registerCheck<NonAsciiStringLiteralCheck>("juce-non-ascii-string-literal");
         factories.registerCheck<NormalisedParameterValueCheck>("juce-normalised-parameter-value");
         factories.registerCheck<NullableDereferenceCheck>("juce-nullable-dereference");
@@ -98,12 +120,15 @@ public:
         factories.registerCheck<ParameterVersionHintCheck>("juce-parameter-version-hint");
         factories.registerCheck<PassSmallObjectsByValueCheck>("juce-pass-small-objects-by-value");
         factories.registerCheck<PlatformMacrosCheck>("juce-platform-macros");
+        factories.registerCheck<PluginGlobalStateCheck>("juce-plugin-global-state");
         factories.registerCheck<PreferConstexprCheck>("juce-prefer-constexpr");
         factories.registerCheck<PreferJassertCheck>("juce-prefer-jassert");
         factories.registerCheck<PreferPreIncrementCheck>("juce-prefer-pre-increment");
+        factories.registerCheck<ProcessorEditorCouplingCheck>("juce-processor-editor-coupling");
         factories.registerCheck<PropertyNameCaseCheck>("juce-property-name-case");
         factories.registerCheck<RealtimeSafetyCheck>("juce-realtime-safety");
         factories.registerCheck<RelativeFilePathCheck>("juce-relative-file-path");
+        factories.registerCheck<RepaintTimerCheck>("juce-repaint-timer");
         factories.registerCheck<ScopedNoDenormalsCheck>("juce-scoped-no-denormals");
         factories.registerCheck<StateTypeCheck>("juce-state-type-check");
         factories.registerCheck<StdMathFunctionsCheck>("juce-std-math-functions");
@@ -117,7 +142,14 @@ public:
         factories.registerCheck<UnknownParameterIdCheck>("juce-unknown-parameter-id");
         factories.registerCheck<UnownedChildComponentCheck>("juce-unowned-child-component");
         factories.registerCheck<UnpreparedDspCheck>("juce-unprepared-dsp");
+        factories.registerCheck<UnregisteredWebRelayCheck>("juce-unregistered-web-relay");
+        factories.registerCheck<UnrestrictedWebviewNavigationCheck>("juce-unrestricted-webview-navigation");
+        factories.registerCheck<UntitledControlCheck>("juce-untitled-control");
         factories.registerCheck<ValuetreeIdentityComparisonCheck>("juce-valuetree-identity-comparison");
+        factories.registerCheck<WebviewDevServerInReleaseCheck>("juce-webview-dev-server-in-release");
+        factories.registerCheck<WebviewEventBeforeLoadCheck>("juce-webview-event-before-load");
+        factories.registerCheck<WebviewResourceMimeTypeCheck>("juce-webview-resource-mime-type");
+        factories.registerCheck<WebviewWindowsOptionsCheck>("juce-webview-windows-options");
     }
 };
 } // namespace
