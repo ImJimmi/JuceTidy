@@ -255,9 +255,9 @@ private:
 [3] warning: 'bypassButton' is never given an accessible title. Call 'setTitle()' or 'setButtonText()' so screen readers can announce it [juce-untitled-control]
 ```
 
-## Building
+## Installing
 
-You should build the plugin locally as it depends on the specific version of Clang-Tidy you use to run the checks. The plugin requires Clang-Tidy 23, which is packaged with LLVM 23, so be sure to install it with
+The plugin requires Clang-Tidy 23, which is packaged with LLVM 23, so be sure to install it with
 
 ```bash
 brew install llvm@23
@@ -265,7 +265,17 @@ brew install llvm@23
 
 _(Only macOS is supported as Clang-Tidy can't load plugins on Windows)._
 
-Then, build the plugin with
+Then download the latest version from [GitHub Releases](https://github.com/ImJimmi/JuceTidy/releases) and extract `JuceTidy.so` somewhere convenient.
+
+If macOS refuses to load the downloaded plugin, remove its quarantine attribute:
+
+```bash
+xattr -d com.apple.quarantine /path/to/JuceTidy.so
+```
+
+### Building from source
+
+The plugin only works with the major version of Clang-Tidy it was built against, so if the prebuilt release doesn't match your Clang-Tidy version or architecture, build it yourself with
 
 ```bash
 cmake \
@@ -276,8 +286,6 @@ cmake \
 
 cmake --build build
 ```
-
-### Installing
 
 The CMake config includes installation rules so you can use `cmake --install` to copy the plugin to a system folder if you so wish.
 
