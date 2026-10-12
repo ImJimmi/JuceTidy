@@ -7,7 +7,7 @@ project(JuceTidy
 
 option(JUCE_TIDY_BUILD_TESTS "Build and register the check tests?" ON)
 
-find_package(Clang REQUIRED CONFIG)
+find_package(Clang 23.1 REQUIRED CONFIG)
 message(STATUS "Building against LLVM ${LLVM_PACKAGE_VERSION} from ${LLVM_INSTALL_PREFIX}")
 
 add_library(JuceTidy MODULE

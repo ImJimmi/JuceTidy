@@ -257,10 +257,10 @@ private:
 
 ## Building
 
-You should build the plugin locally as it depends on the specific version of Clang-Tidy you use to run the checks. Clang-Tidy is packaged with LLVM so be sure to install or update LLVM with
+You should build the plugin locally as it depends on the specific version of Clang-Tidy you use to run the checks. The plugin requires Clang-Tidy 23, which is packaged with LLVM 23, so be sure to install it with
 
 ```bash
-brew install llvm
+brew install llvm@23
 ```
 
 _(Only macOS is supported as Clang-Tidy can't load plugins on Windows)._
@@ -272,7 +272,7 @@ cmake \
   -B build \
   -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
-  -DCMAKE_PREFIX_PATH="$(brew --prefix llvm)"
+  -DCMAKE_PREFIX_PATH="$(brew --prefix llvm@23)"
 
 cmake --build build
 ```
