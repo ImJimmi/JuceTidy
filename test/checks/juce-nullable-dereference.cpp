@@ -57,3 +57,36 @@ void evaluate(juce::WebBrowserComponent& browser)
         (void) result.getError()->message; // EXPECT_WARNING
     });
 }
+
+void variants(const juce::var& value, const juce::XmlElement& xml, juce::Component& component, juce::AudioProcessor& processor)
+{
+    (void) value.getArray()->size(); // EXPECT_WARNING
+    (void) *value.getArray(); // EXPECT_WARNING
+    value.getDynamicObject()->setProperty("x", 1); // EXPECT_WARNING
+
+    if (auto* array = value.getArray())
+        (void) array->size();
+
+    if (value.isArray())
+        (void) value.getArray()->size();
+    else if (value.isObject())
+        (void) value.getObject();
+    else if (value.isBinaryData())
+        (void) value.getArray()->size(); // EXPECT_WARNING
+
+    if (value.isArray())
+    {
+        const auto& elements = *value.getArray();
+        (void) elements;
+    }
+
+    (void) xml.getChildByName("child")->getTagName(); // EXPECT_WARNING
+    component.getChildComponent(0)->repaint(); // EXPECT_WARNING
+    (void) processor.getBus(true, 0)->getNumberOfChannels(); // EXPECT_WARNING
+
+    (void) dynamic_cast<juce::Slider*>(&component)->getValue(); // EXPECT_WARNING
+    (void) dynamic_cast<juce::Slider&>(component).getValue();
+
+    if (auto* slider = dynamic_cast<juce::Slider*>(&component))
+        (void) slider->getValue();
+}

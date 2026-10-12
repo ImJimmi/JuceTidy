@@ -5,6 +5,11 @@ verifies that it warns on exactly the lines marked with:
 
     int value = 0; // EXPECT_WARNING
 
+or, for lines that can't hold a marker themselves, on the line below with:
+
+    int value = 0;
+    // EXPECT_WARNING_ABOVE
+
 Check options can be set with:
 
     // OPTION: SomeOption=some value
@@ -24,6 +29,7 @@ import subprocess
 import sys
 
 EXPECT_WARNING = re.compile(r"//\s*EXPECT_WARNING\b")
+EXPECT_WARNING_ABOVE = re.compile(r"//\s*EXPECT_WARNING_ABOVE\b")
 OPTION_DIRECTIVE = re.compile(r"//\s*OPTION:\s*([A-Za-z]+)=(.*)$", re.MULTILINE)
 STD_DIRECTIVE = re.compile(r"//\s*STD:\s*(\S+)", re.MULTILINE)
 DIAGNOSTIC = re.compile(r"^(.+?):(\d+):\d+: (warning|error):", re.MULTILINE)
@@ -77,6 +83,10 @@ def main():
         (test_file, number, "warning")
         for number, line in enumerate(source.splitlines(), start=1)
         if EXPECT_WARNING.search(line)
+    } | {
+        (test_file, number - 1, "warning")
+        for number, line in enumerate(source.splitlines(), start=1)
+        if EXPECT_WARNING_ABOVE.search(line)
     }
     reported = {
         (pathlib.Path(path).resolve(), int(line), severity)

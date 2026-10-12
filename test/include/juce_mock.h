@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <functional>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -78,6 +79,12 @@ constexpr Type jmin (Type a, Type b, Type c, Type d);
 
 template <typename Type>
 Type jlimit (Type lowerLimit, Type upperLimit, Type valueToConstrain) noexcept;
+
+template <typename Type>
+constexpr bool exactlyEqual (Type a, Type b);
+
+template <typename Type>
+constexpr bool approximatelyEqual (Type a, Type b);
 
 template <typename Type>
 Type juce_hypot (Type a, Type b) noexcept;
@@ -187,6 +194,8 @@ class Rectangle
 public:
     Rectangle() = default;
     Rectangle (ValueType x, ValueType y, ValueType w, ValueType h) noexcept;
+    void setWidth (ValueType newWidth) noexcept;
+    void setHeight (ValueType newHeight) noexcept;
 };
 
 template <typename ValueType>
@@ -205,6 +214,10 @@ class Time
 {
 public:
     static Time getCurrentTime() noexcept;
+    static int64 currentTimeMillis() noexcept;
+    static uint32 getMillisecondCounter() noexcept;
+    static double getMillisecondCounterHiRes() noexcept;
+    static int64 getHighResolutionTicks() noexcept;
 };
 
 class RelativeTime
@@ -254,6 +267,72 @@ public:
     int size() const noexcept;
 };
 
+inline constexpr size_t dynamicExtent = std::numeric_limits<size_t>::max();
+
+template <typename Value, size_t Extent = dynamicExtent>
+class Span
+{
+public:
+    constexpr Span() = default;
+    constexpr Span (Value* ptr, size_t size);
+    constexpr size_t size() const;
+};
+
+template <typename Value>
+class Optional
+{
+public:
+    Optional() = default;
+    Optional (Value value);
+    bool hasValue() const noexcept;
+};
+
+template <typename Type>
+struct Atomic
+{
+    Atomic() noexcept;
+    Atomic (Type initialValue) noexcept;
+    Type get() const noexcept;
+    void set (Type newValue) noexcept;
+};
+
+template <typename FloatType>
+struct MathConstants
+{
+    static constexpr FloatType pi = static_cast<FloatType> (3.141592653589793238L);
+    static constexpr FloatType twoPi = static_cast<FloatType> (2 * 3.141592653589793238L);
+    static constexpr FloatType halfPi = static_cast<FloatType> (3.141592653589793238L / 2);
+    static constexpr FloatType euler = static_cast<FloatType> (2.71828182845904523536L);
+    static constexpr FloatType sqrt2 = static_cast<FloatType> (1.4142135623730950488L);
+};
+
+template <typename KeyType, typename ValueType>
+class HashMap
+{
+public:
+    void set (KeyType newKey, ValueType newValue);
+    int size() const noexcept;
+};
+
+template <class ElementType>
+class SortedSet
+{
+public:
+    bool add (const ElementType& newElement) noexcept;
+    int size() const noexcept;
+};
+
+template <class ListenerClass>
+class ListenerList
+{
+public:
+    void add (ListenerClass* listenerToAdd);
+    void remove (ListenerClass* listenerToRemove);
+
+    template <typename Callback>
+    void call (Callback&& callback);
+};
+
 template <typename ElementType>
 class HeapBlock
 {
@@ -265,13 +344,42 @@ public:
     ElementType* get() const noexcept;
 };
 
+class MemoryBlock;
+class ReferenceCountedObject;
+class DynamicObject;
+
 class var
 {
 public:
+    struct NativeFunctionArgs;
+    using NativeFunction = std::function<var (const NativeFunctionArgs&)>;
+
     var() noexcept;
     var (int);
     var (const char*);
     var (const String&);
+
+    bool isArray() const noexcept;
+    bool isObject() const noexcept;
+    bool isBinaryData() const noexcept;
+    Array<var>* getArray() const noexcept;
+    MemoryBlock* getBinaryData() const noexcept;
+    ReferenceCountedObject* getObject() const noexcept;
+    DynamicObject* getDynamicObject() const noexcept;
+    NativeFunction getNativeFunction() const;
+};
+
+class ReferenceCountedObject
+{
+public:
+    virtual ~ReferenceCountedObject();
+};
+
+class DynamicObject : public ReferenceCountedObject
+{
+public:
+    const var& getProperty (const Identifier& propertyName) const;
+    void setProperty (const Identifier& propertyName, const var& newValue);
 };
 
 class XmlElement
@@ -279,6 +387,8 @@ class XmlElement
 public:
     String getTagName() const;
     bool hasTagName (StringRef possibleTagName) const noexcept;
+    XmlElement* getChildByName (StringRef tagNameToLookFor) const noexcept;
+    XmlElement* getFirstChildElement() const noexcept;
 };
 
 std::unique_ptr<XmlElement> parseXML (const String& textToParse);
@@ -298,6 +408,11 @@ public:
     public:
         virtual ~Listener() = default;
         virtual void valueTreePropertyChanged (ValueTree&, const Identifier&) {}
+        virtual void valueTreeChildAdded (ValueTree& parentTree, ValueTree& childWhichHasBeenAdded) {}
+        virtual void valueTreeChildRemoved (ValueTree& parentTree, ValueTree& childWhichHasBeenRemoved, int indexFromWhichChildWasRemoved) {}
+        virtual void valueTreeChildOrderChanged (ValueTree& parentTreeWhoseChildrenHaveMoved, int oldIndex, int newIndex) {}
+        virtual void valueTreeParentChanged (ValueTree& treeWhoseParentHasChanged) {}
+        virtual void valueTreeRedirected (ValueTree& treeWhichHasBeenChanged) {}
     };
 
     ValueTree() noexcept;
@@ -322,8 +437,13 @@ public:
     ValueTree getChildWithProperty (const Identifier& propertyName, const var& propertyValue) const;
     ValueTree getParent() const noexcept;
     ValueTree getSibling (int delta) const noexcept;
+    ValueTree getRoot() const noexcept;
     void appendChild (const ValueTree& child, UndoManager* undoManager);
+    void addChild (const ValueTree& child, int index, UndoManager* undoManager);
     void removeChild (const ValueTree& child, UndoManager* undoManager);
+    void removeAllChildren (UndoManager* undoManager);
+    void removeAllProperties (UndoManager* undoManager);
+    void moveChild (int currentIndex, int newIndex, UndoManager* undoManager);
     std::unique_ptr<XmlElement> createXml() const;
     static ValueTree fromXml (const XmlElement& xml);
     static ValueTree readFromData (const void* data, size_t numBytes);
@@ -510,6 +630,7 @@ public:
     void addChangeListener (ChangeListener* listener);
     void removeChangeListener (ChangeListener* listener);
     void sendChangeMessage();
+    void sendSynchronousChangeMessage();
 };
 
 class AsyncUpdater
@@ -529,6 +650,18 @@ public:
     void startTimerHz (int timerFrequencyHz) noexcept;
     void stopTimer() noexcept;
     static void callAfterDelay (int milliseconds, std::function<void()> functionToCall);
+};
+
+class TimedCallback final : private Timer
+{
+public:
+    explicit TimedCallback (std::function<void()> callbackIn);
+    using Timer::startTimer;
+    using Timer::startTimerHz;
+    using Timer::stopTimer;
+
+private:
+    void timerCallback() override;
 };
 
 class HighResolutionTimer
@@ -709,6 +842,7 @@ public:
     void setWantsKeyboardFocus (bool wantsFocus) noexcept;
 
     Component* getParentComponent() const noexcept;
+    Component* getChildComponent (int index) const noexcept;
     void addComponentListener (ComponentListener* listener);
     void removeComponentListener (ComponentListener* listener);
     void addMouseListener (Component* newListener, bool wantsEventsForAllNestedChildComponents);
@@ -726,6 +860,13 @@ public:
         ComponentType* getComponent() const noexcept;
         operator ComponentType*() const noexcept;
         ComponentType* operator->() const noexcept;
+    };
+
+    class BailOutChecker
+    {
+    public:
+        BailOutChecker (Component* component);
+        bool shouldBailOut() const noexcept;
     };
 };
 
@@ -1291,6 +1432,23 @@ public:
     virtual AudioProcessorEditor* createEditor() = 0;
     virtual void getStateInformation (MemoryBlock& destData) = 0;
     virtual void setStateInformation (const void* data, int sizeInBytes) = 0;
+    virtual int getNumPrograms() = 0;
+    virtual int getCurrentProgram() = 0;
+    virtual void setCurrentProgram (int index) = 0;
+    virtual void numChannelsChanged();
+
+    class Bus
+    {
+    public:
+        int getNumberOfChannels() const noexcept;
+    };
+
+    Bus* getBus (bool isInput, int busIndex) noexcept;
+    double getSampleRate() const noexcept;
+    int getBlockSize() const noexcept;
+    void setLatencySamples (int newLatency);
+    void setPlayConfigDetails (int numIns, int numOuts, double sampleRate, int blockSize);
+    void setRateAndBufferSizeDetails (double sampleRate, int blockSize) noexcept;
 
     static void copyXmlToBinary (const XmlElement& xml, MemoryBlock& destData);
     static std::unique_ptr<XmlElement> getXmlFromBinary (const void* data, int sizeInBytes);
@@ -1305,6 +1463,8 @@ class AudioProcessorEditor : public Component
 public:
     explicit AudioProcessorEditor (AudioProcessor&) noexcept;
     ~AudioProcessorEditor() override;
+
+    AudioProcessor& processor;
 };
 
 class AudioProcessorValueTreeState
@@ -1445,6 +1605,33 @@ public:
     void addAudioCallback (AudioIODeviceCallback* newCallback);
     void removeAudioCallback (AudioIODeviceCallback* callback);
 };
+class UnitTest
+{
+public:
+    explicit UnitTest (const String& name, const String& category = String());
+    virtual ~UnitTest();
+
+    virtual void runTest() = 0;
+
+    void beginTest (const String& testName);
+    void expect (bool testResult, const String& failureMessage = String());
+
+    template <class ValueType>
+    void expectEquals (ValueType actual, ValueType expected, String failureMessage = String());
+    template <class ValueType>
+    void expectNotEquals (ValueType value, ValueType valueToCompareTo, String failureMessage = String());
+    template <class ValueType>
+    void expectGreaterThan (ValueType value, ValueType valueToCompareTo, String failureMessage = String());
+    template <class ValueType>
+    void expectLessThan (ValueType value, ValueType valueToCompareTo, String failureMessage = String());
+    template <class ValueType>
+    void expectGreaterOrEqual (ValueType value, ValueType valueToCompareTo, String failureMessage = String());
+    template <class ValueType>
+    void expectLessOrEqual (ValueType value, ValueType valueToCompareTo, String failureMessage = String());
+    template <class ValueType>
+    void expectWithinAbsoluteError (ValueType actual, ValueType expected, ValueType maxAbsoluteError, String failureMessage = String());
+};
+
 template <typename Type, typename MutexType, bool onlyCreateOncePerRun>
 struct SingletonHolder
 {

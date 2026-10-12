@@ -277,13 +277,27 @@ cmake \
 cmake --build build
 ```
 
+### Installing
+
+The CMake config includes installation rules so you can use `cmake --install` to copy the plugin to a system folder if you so wish.
+
+```bash
+cmake --install build
+```
+
+By default this installs the plugin to `/usr/local/lib/JuceTidy.so`, which may require `sudo`. Use `--prefix` to install it somewhere else instead:
+
+```bash
+cmake --install build --prefix ~/.local
+```
+
 ## Usage
 
-Load the plugin (`build/JuceTidy.so`) with `--load` and enable the checks you want:
+Load the plugin (`JuceTidy.so`) with `--load` and enable the checks you want:
 
 ```bash
 clang-tidy \
-  --load=/path/to/JuceTidy/build/JuceTidy.so \
+  --load=/path/to/plugins/JuceTidy.so \
   --checks='-*,juce-*' \
   -p path/to/your/build \
   MyJuceCode.cpp

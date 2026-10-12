@@ -25,6 +25,20 @@ namespace clang::tidy::juce
             return hasNonBlockingEffect(Node);
         }
 
+        AST_MATCHER(ClassTemplateSpecializationDecl, isNonLockFreeAtomic)
+        {
+            if (utils::qualifiedName(Node) != "std::atomic" || Node.getTemplateArgs().size() != 1)
+                return false;
+
+            const auto valueType = Node.getTemplateArgs().get(0).getAsType();
+
+            if (valueType.isNull() || valueType->isDependentType() || valueType->isIncompleteType())
+                return false;
+
+            const auto size = Finder->getASTContext().getTypeSizeInChars(valueType).getQuantity();
+            return size != 1 && size != 2 && size != 4 && size != 8;
+        }
+
         class RealtimeSafetyCheck : public JuceTidyCheck
         {
         public:
@@ -449,6 +463,18 @@ namespace clang::tidy::juce
                         .matcher = cxxConstructExpr(hasDeclaration(cxxConstructorDecl(ofClass(hasName("::juce::Identifier")), unless(isCopyConstructor()), unless(isMoveConstructor())))),
                         .reason = "locks JUCE's global string pool",
                     },
+                    {
+                        .matcher = expr(anyOf(methodOf({ "::std::weak_ptr" }, { "lock" }), cxxConstructExpr(hasDeclaration(cxxConstructorDecl(isCopyConstructor(), ofClass(hasName("::std::shared_ptr"))))))),
+                        .reason = "takes shared ownership, so the object may be destroyed on the audio thread",
+                    },
+                    {
+                        .matcher = expr(anyOf(cxxOperatorCallExpr(hasOverloadedOperatorName("="), callee(cxxMethodDecl(ofClass(hasName("::std::shared_ptr"))))), methodOf({ "::std::shared_ptr" }, { "reset" }))),
+                        .reason = "may destroy the shared object on the audio thread",
+                    },
+                    {
+                        .matcher = expr(anyOf(cxxMemberCallExpr(on(nonLockFreeAtomic())), cxxOperatorCallExpr(hasArgument(0, nonLockFreeAtomic())))),
+                        .reason = "isn't lock-free for this type, so it may lock",
+                    },
                 };
 
                 if (checkParameterLookups)
@@ -716,6 +742,13 @@ namespace clang::tidy::juce
                 return cxxMemberCallExpr(callee(cxxMethodDecl(ofClass(isSameOrDerivedFrom(hasAnyName(classes))))));
             }
 
+            [[nodiscard]] static ast_matchers::internal::Matcher<Expr> nonLockFreeAtomic()
+            {
+                using namespace clang::ast_matchers;
+
+                return expr(hasType(hasCanonicalType(hasDeclaration(classTemplateSpecializationDecl(isNonLockFreeAtomic())))));
+            }
+
             [[nodiscard]] static ast_matchers::internal::Matcher<NamedDecl> stringType()
             {
                 using namespace clang::ast_matchers;
@@ -755,6 +788,16 @@ namespace clang::tidy::juce
 
                 if (const auto* reference = dyn_cast<DeclRefExpr>(&node))
                     return "using '" + utils::qualifiedName(*reference->getDecl()) + "'";
+
+                if (const auto* call = dyn_cast<CXXMemberCallExpr>(&node);
+                    call != nullptr && call->getMethodDecl() != nullptr && call->getMethodDecl()->getParent()->getName().starts_with("__"))
+                {
+                    auto policy = PrintingPolicy{ LangOptions{} };
+                    policy.SuppressTagKeyword = true;
+
+                    const auto objectType = call->getImplicitObjectArgument()->IgnoreParenBaseCasts()->getType().getUnqualifiedType();
+                    return "calling '" + objectType.getAsString(policy) + "::" + call->getMethodDecl()->getNameAsString() + "'";
+                }
 
                 if (const auto* call = dyn_cast<CallExpr>(&node);
                     call != nullptr && call->getDirectCallee() != nullptr)

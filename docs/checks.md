@@ -9,10 +9,13 @@
 - [juce-buffered-parent](#juce-buffered-parent)
 - [juce-callback-dangling-capture](#juce-callback-dangling-capture)
 - [juce-duplicate-webview-name](#juce-duplicate-webview-name)
+- [juce-empty-state-information](#juce-empty-state-information)
 - [juce-expensive-paint](#juce-expensive-paint)
 - [juce-explicit-base-access](#juce-explicit-base-access)
 - [juce-explicit-nullptr-comparison](#juce-explicit-nullptr-comparison)
 - [juce-explicit-unsigned-int](#juce-explicit-unsigned-int)
+- [juce-float-equality](#juce-float-equality)
+- [juce-float-max-geometry](#juce-float-max-geometry)
 - [juce-graphics-save-state](#juce-graphics-save-state)
 - [juce-hardcoded-resource-provider-root](#juce-hardcoded-resource-provider-root)
 - [juce-identifier-from-literal](#juce-identifier-from-literal)
@@ -26,6 +29,7 @@
 - [juce-manual-resized-call](#juce-manual-resized-call)
 - [juce-member-access-order](#juce-member-access-order)
 - [juce-message-manager-lock-unchecked](#juce-message-manager-lock-unchecked)
+- [juce-message-thread-object-in-prepare](#juce-message-thread-object-in-prepare)
 - [juce-missing-accessibility-handler](#juce-missing-accessibility-handler)
 - [juce-missing-remove-listener](#juce-missing-remove-listener)
 - [juce-native-function-completion](#juce-native-function-completion)
@@ -43,13 +47,21 @@
 - [juce-plugin-global-state](#juce-plugin-global-state)
 - [juce-prefer-constexpr](#juce-prefer-constexpr)
 - [juce-prefer-jassert](#juce-prefer-jassert)
+- [juce-prefer-logger](#juce-prefer-logger)
 - [juce-prefer-pre-increment](#juce-prefer-pre-increment)
+- [juce-prefer-start-timer-hz](#juce-prefer-start-timer-hz)
+- [juce-prefer-std-containers](#juce-prefer-std-containers)
+- [juce-prefer-timed-callback](#juce-prefer-timed-callback)
+- [juce-private-callback-inheritance](#juce-private-callback-inheritance)
 - [juce-processor-editor-coupling](#juce-processor-editor-coupling)
+- [juce-processor-state-from-editor](#juce-processor-state-from-editor)
+- [juce-program-count](#juce-program-count)
 - [juce-property-name-case](#juce-property-name-case)
 - [juce-realtime-safety](#juce-realtime-safety)
 - [juce-relative-file-path](#juce-relative-file-path)
 - [juce-repaint-timer](#juce-repaint-timer)
 - [juce-scoped-no-denormals](#juce-scoped-no-denormals)
+- [juce-separator-comments](#juce-separator-comments)
 - [juce-state-type-check](#juce-state-type-check)
 - [juce-std-math-functions](#juce-std-math-functions)
 - [juce-stop-in-destructor](#juce-stop-in-destructor)
@@ -58,14 +70,19 @@
 - [juce-unadded-child-component](#juce-unadded-child-component)
 - [juce-unbound-cached-value](#juce-unbound-cached-value)
 - [juce-unchecked-child-tree](#juce-unchecked-child-tree)
+- [juce-unchecked-sample-rate](#juce-unchecked-sample-rate)
 - [juce-undo-manager-consistency](#juce-undo-manager-consistency)
+- [juce-unit-test-assertions](#juce-unit-test-assertions)
 - [juce-unknown-parameter-id](#juce-unknown-parameter-id)
 - [juce-unowned-child-component](#juce-unowned-child-component)
 - [juce-unprepared-dsp](#juce-unprepared-dsp)
+- [juce-unregistered-unit-test](#juce-unregistered-unit-test)
 - [juce-unregistered-web-relay](#juce-unregistered-web-relay)
 - [juce-unrestricted-webview-navigation](#juce-unrestricted-webview-navigation)
 - [juce-untitled-control](#juce-untitled-control)
+- [juce-use-after-callback](#juce-use-after-callback)
 - [juce-valuetree-identity-comparison](#juce-valuetree-identity-comparison)
+- [juce-valuetree-listener-reentrancy](#juce-valuetree-listener-reentrancy)
 - [juce-webview-dev-server-in-release](#juce-webview-dev-server-in-release)
 - [juce-webview-event-before-load](#juce-webview-event-before-load)
 - [juce-webview-resource-mime-type](#juce-webview-resource-mime-type)
@@ -176,6 +193,16 @@ juce::WebSliderRelay gainRelay{ "gain" };
 juce::WebSliderRelay outputRelay{ "gain" }; // warning
 ```
 
+## juce-empty-state-information
+
+Flags empty `getStateInformation()` and `setStateInformation()` overrides, including ones that only ignore their arguments. Hosts save and restore a plugin's state through these, so leaving either one empty means settings are lost when a session is reopened. Suppress the warning if the plugin really has no state.
+
+```cpp
+void getStateInformation(juce::MemoryBlock&) override // warning
+{
+}
+```
+
 ## juce-expensive-paint
 
 Flags expensive work in `paint`, such as loading images, parsing XML or JSON, creating typefaces and file access. It's repeated on every repaint, so do it once and store the result.
@@ -220,6 +247,23 @@ Flags `unsigned` on its own. The JUCE coding standards ask for `unsigned int`.
 
 ```cpp
 unsigned count; // unsigned int count;
+```
+
+## juce-float-equality
+
+Flags `==` and `!=` between floating-point values. Rounding errors mean values that should be equal often aren't, so use `juce::approximatelyEqual()`, or `juce::exactlyEqual()` if an exact comparison is intended. When both sides have the same type, the fix replaces the comparison with `juce::approximatelyEqual()`.
+
+```cpp
+if (gain == targetGain) // if (juce::approximatelyEqual(gain, targetGain))
+```
+
+## juce-float-max-geometry
+
+Flags `std::numeric_limits<float>::max()`, `lowest()` and `infinity()` passed to JUCE functions and constructors. JUCE converts many sizes and positions to `int` internally, where these values overflow. Use a large finite value instead.
+
+```cpp
+constraints.setWidth(std::numeric_limits<float>::max()); // warning
+constraints.setWidth(65535.0f);
 ```
 
 ## juce-graphics-save-state
@@ -371,6 +415,21 @@ if (!lock.lockWasGained())
     return;
 ```
 
+## juce-message-thread-object-in-prepare
+
+Flags creating or destroying a `Timer`, `AsyncUpdater`, `ChangeBroadcaster`, `Component` or anything that owns one in `prepareToPlay()`, `releaseResources()` or `numChannelsChanged()`, and in the functions they call. Hosts may call these from a thread other than the message thread, where these objects mustn't be created or destroyed.
+
+```cpp
+void prepareToPlay(double sampleRate, int blockSize) override
+{
+    analyser = std::make_unique<Analyser>(); // warning if Analyser owns a juce::Timer
+}
+```
+
+Calls through `std::function`s and virtual functions aren't followed.
+
+See [juce-message-thread-object-in-prepare options](options.md#juce-message-thread-object-in-prepare).
+
 ## juce-missing-accessibility-handler
 
 Flags components that override `mouseDown`, `mouseUp`, `mouseDrag` or `mouseDoubleClick` but don't override `createAccessibilityHandler()`. The default handler has no role, value or actions, so screen readers can't tell what the component is or interact with it. Components that inherit a handler, such as `Slider` subclasses, and components hidden with `setAccessible(false)` are ignored.
@@ -425,10 +484,11 @@ auto cutoff = apvts.getParameter("cutoff")->getValue(); // warning
 
 ## juce-nullable-dereference
 
-Flags dereferencing JUCE functions that can return `nullptr`, such as `getPlayHead()` when the host has no play head.
+Flags dereferencing JUCE functions that can return `nullptr`, such as `getPlayHead()` when the host has no play head, or `var::getArray()` when the `var` isn't an array. It also flags dereferencing the result of a `dynamic_cast` to a pointer, which is `nullptr` when the object isn't the requested type.
 
 ```cpp
 const auto bpm = getPlayHead()->getPosition()->getBpm(); // warning
+dynamic_cast<juce::Slider*>(component)->setValue(0.0);   // warning
 
 if (auto* playHead = getPlayHead())
 {
@@ -547,6 +607,19 @@ assert(index >= 0); // jassert(index >= 0);
 jassert(false);     // jassertfalse;
 ```
 
+## juce-prefer-logger
+
+Flags writing to `std::cout`, `std::cerr` and the other standard streams, and to the console with `std::print()`, `std::println()`, `printf()`, `puts()` and similar. Functions that take a `FILE*`, such as `fprintf()` or `std::print(stream, ...)`, are only flagged when writing to `stdout` or `stderr`. `juce::Logger::writeToLog()` sends the message to the debugger, and to any logger set with `juce::Logger::setCurrentLogger()`, such as a `juce::FileLogger`.
+
+```cpp
+std::cout << "Loaded preset\n";              // warning
+juce::Logger::writeToLog("Loaded preset");
+```
+
+Disable this check for command-line apps, which write to the console on purpose.
+
+See [juce-prefer-logger options](options.md#juce-prefer-logger).
+
 ## juce-prefer-pre-increment
 
 Flags `i++` and `i--` when the result isn't used. The JUCE coding standards say to use pre-increment wherever it would do.
@@ -554,6 +627,60 @@ Flags `i++` and `i--` when the result isn't used. The JUCE coding standards say 
 ```cpp
 for (int i = 0; i < size; i++) // ++i
 ```
+
+## juce-prefer-start-timer-hz
+
+Flags `startTimer(1000 / frequency)`, which truncates the interval, and replaces it with `startTimerHz(frequency)`.
+
+```cpp
+startTimer(1000 / 60); // startTimerHz(60);
+```
+
+## juce-prefer-std-containers
+
+Flags JUCE types that have a standard library equivalent:
+
+- `juce::Array`, `OwnedArray`, `HashMap`, `SortedSet`, `HeapBlock` and `ScopedPointer`
+- `juce::Span`, `Optional` and `Atomic`
+- `juce::CriticalSection` and `ScopedLock`
+- `juce::MemoryBlock`, which should be a `std::vector<std::byte>` when the object owns the data, or a `std::span<std::byte>` when it's a reference or pointer to data owned elsewhere
+- `juce::int8`, `uint8` and the other integer types, which the fix replaces with `std::int8_t` and friends
+
+Variables, members, parameters and return types are flagged. Parameters of overrides and lambdas are skipped, as JUCE usually decides their types.
+
+```cpp
+juce::Array<float> levels;                // warning: use 'std::vector' instead of 'juce::Array'
+void load(const juce::MemoryBlock& data); // warning: use 'std::span<const std::byte>'
+juce::uint8 channel = 0;                  // std::uint8_t channel = 0;
+```
+
+See [juce-prefer-std-containers options](options.md#juce-prefer-std-containers).
+
+## juce-prefer-timed-callback
+
+Flags classes that inherit from `juce::Timer`. A `juce::TimedCallback` member, available from JUCE 7.0.10, does the same job without adding the timer's methods to the class.
+
+```cpp
+class Meter
+    : public juce::Component
+    , private juce::Timer // warning
+{
+};
+
+juce::TimedCallback refresh{ [this] { update(); } };
+```
+
+## juce-private-callback-inheritance
+
+Flags public inheritance from `juce::Timer`, `juce::AsyncUpdater`, JUCE's `Listener` classes and other callback interfaces. Public inheritance makes methods like `startTimer()` and `timerCallback()` part of the class's interface, so any code can call them. Classes that are converted to the base outside their own member functions, for example to register them as a listener, are skipped.
+
+```cpp
+class Meter
+    : public juce::Component
+    , public juce::Timer // private juce::Timer
+```
+
+See [juce-private-callback-inheritance options](options.md#juce-private-callback-inheritance).
 
 ## juce-processor-editor-coupling
 
@@ -577,6 +704,31 @@ Editor::Editor(Processor& p)
 
 Assignments that are reset in the editor's destructor are allowed.
 
+## juce-processor-state-from-editor
+
+Flags editors that call `setLatencySamples()`, `setPlayConfigDetails()` or `setRateAndBufferSizeDetails()` on their processor. There may be no editor, for example when it's closed or the host is rendering offline, so the processor's state would depend on whether the editor happens to be open.
+
+```cpp
+Editor(Processor& p)
+    : juce::AudioProcessorEditor{ p }
+{
+    p.setLatencySamples(analyser.getLatencySamples()); // warning
+}
+```
+
+See [juce-processor-state-from-editor options](options.md#juce-processor-state-from-editor).
+
+## juce-program-count
+
+Flags `getNumPrograms()` overrides that return less than 1. JUCE's documentation says not to, as some hosts don't cope with plugins that have no programs.
+
+```cpp
+int getNumPrograms() override
+{
+    return 0; // return 1;
+}
+```
+
 ## juce-property-name-case
 
 Flags identifiers and parameter IDs that differ from another in the same file only by case. JUCE compares them case-sensitively, so the typo silently uses a different property.
@@ -588,13 +740,16 @@ state.setProperty("Cutoff", 1000, nullptr); // warning
 
 ## juce-realtime-safety
 
-Flags allocation, locking, I/O, message-thread work and parameter lookups by ID in audio callbacks, parameter callbacks and every function they call. These can block the audio thread and cause dropouts.
+Flags allocation, locking, I/O, message-thread work and parameter lookups by ID in audio callbacks, parameter callbacks and every function they call. These can block the audio thread and cause dropouts. It also flags shared ownership, such as copying a `std::shared_ptr` or calling `std::weak_ptr::lock()`, which can leave the audio thread destroying the object, and `std::atomic`s of types that aren't lock-free.
 
 ```cpp
 void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) override
 {
     DBG("processing");                         // warning
     samples.push_back(buffer.getSample(0, 0)); // warning: may allocate
+
+    if (auto meter = weakMeter.lock())         // warning: may destroy the meter
+        meter->push(buffer);
 }
 ```
 
@@ -651,6 +806,23 @@ void processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer&) override
 
 See [juce-scoped-no-denormals options](options.md#juce-scoped-no-denormals).
 
+## juce-separator-comments
+
+Flags separator comments that aren't `//` followed by 78 `=`, which is JUCE's style. Every separator is then 80 characters long, whatever its indentation. Comments with code before them on the same line are ignored, as they're not necessarily separators. The fix rewrites the separator, unless it's a block comment with code after it on the same line.
+
+```cpp
+//==============================================================================
+class Meter
+{
+public:
+    //==============================================================================
+    void reset();
+
+    //---------------------------------------- // //==============================================================================
+    void process();
+};
+```
+
 ## juce-state-type-check
 
 Flags `setStateInformation` loading saved state into an `AudioProcessorValueTreeState` without checking its type. Old or corrupt data would replace every parameter.
@@ -662,11 +834,12 @@ if (xml != nullptr && xml->hasTagName(apvts.state.getType()))
 
 ## juce-std-math-functions
 
-Flags C maths functions and JUCE functions with an exact `std::` equivalent. The JUCE coding standards say to use the `std::` versions.
+Flags C maths functions and JUCE functions with an exact `std::` equivalent. The JUCE coding standards say to use the `std::` versions. From C++20, it also replaces `juce::MathConstants` with the constants in `std::numbers`.
 
 ```cpp
 auto root = sqrtf(x);                       // auto root = std::sqrt(x);
 auto clamped = juce::jlimit(0.0f, 1.0f, x); // auto clamped = std::clamp(x, 0.0f, 1.0f);
+auto turn = juce::MathConstants<float>::twoPi; // auto turn = (2 * std::numbers::pi_v<float>);
 ```
 
 See [juce-std-math-functions options](options.md#juce-std-math-functions).
@@ -726,6 +899,20 @@ state.getChildWithName("Filter").setProperty("cutoff", 1000, nullptr); // warnin
 state.getOrCreateChildWithName("Filter", nullptr).setProperty("cutoff", 1000, nullptr);
 ```
 
+## juce-unchecked-sample-rate
+
+Flags dividing by `getSampleRate()`, or by a local variable initialised from it, outside `prepareToPlay()` and the audio callbacks without checking it first. The sample rate is 0 until the host prepares the processor, so code in constructors, editors and timers can divide by zero.
+
+```cpp
+Editor(Processor& p)
+    : juce::AudioProcessorEditor{ p }
+{
+    latencyMs = 1000.0 * latencySamples / p.getSampleRate(); // warning
+}
+```
+
+See [juce-unchecked-sample-rate options](options.md#juce-unchecked-sample-rate).
+
 ## juce-undo-manager-consistency
 
 Flags `ValueTree` changes with a `nullptr` `UndoManager` in a class that elsewhere passes a real one. Mixing them usually means some changes were forgotten and can't be undone.
@@ -740,6 +927,15 @@ void setResonance(float resonance)
 {
     state.setProperty("resonance", resonance, nullptr); // warning
 }
+```
+
+## juce-unit-test-assertions
+
+Flags comparisons inside `juce::UnitTest::expect()` and replaces them with `expectEquals()`, `expectLessThan()` and the other comparison functions, which report both values when they fail. It also flags floating-point values compared with `expect()` or `expectEquals()`, which should use `expectWithinAbsoluteError()`. The fix is only offered when both sides have the same type, as the comparison functions are templates.
+
+```cpp
+expect(result == 42);     // expectEquals(result, 42);
+expectEquals(gain, 0.5f); // warning: use 'expectWithinAbsoluteError()'
 ```
 
 ## juce-unknown-parameter-id
@@ -764,6 +960,19 @@ Flags `SmoothedValue`, `juce::dsp` processors, `Oversampling`, `ADSR` and `Rever
 
 ```cpp
 juce::dsp::Gain<float> gain; // warning if gain.prepare(spec) is never called
+```
+
+## juce-unregistered-unit-test
+
+Flags `juce::UnitTest` subclasses that are never instantiated. JUCE only runs tests that have an instance, so these never run and nothing reports that they're missing.
+
+```cpp
+class FilterTests : public juce::UnitTest // warning
+{
+    // ...
+};
+
+static FilterTests filterTests; // registers the tests
 ```
 
 ## juce-unregistered-web-relay
@@ -803,6 +1012,22 @@ juce::Slider cutoffSlider{ "Cutoff" }; // warning; the name isn't the title
 juce::TextButton bypassButton{ "Bypass" };
 ```
 
+## juce-use-after-callback
+
+Flags member access after calling a `std::function`, `juce::ListenerList::call()`, `sendSynchronousChangeMessage()`, or a member function that calls one of these. The callback may have deleted `this`, for example by closing the window the component is in. Check that `this` still exists first with a `juce::WeakReference`, `juce::Component::SafePointer` or `juce::Component::BailOutChecker`.
+
+```cpp
+void mouseUp(const juce::MouseEvent&) override
+{
+    if (onClick != nullptr)
+        onClick();
+
+    repaint(); // warning
+}
+```
+
+See [juce-use-after-callback options](options.md#juce-use-after-callback).
+
 ## juce-valuetree-identity-comparison
 
 Flags `==` and `!=` between a `ValueTree` and a newly created one. `==` compares identity, not contents, so it's always `false`. Use `isEquivalentTo`.
@@ -810,6 +1035,17 @@ Flags `==` and `!=` between a `ValueTree` and a newly created one. `==` compares
 ```cpp
 if (state == juce::ValueTree::fromXml(*xml)) // warning
 if (state.isEquivalentTo(juce::ValueTree::fromXml(*xml)))
+```
+
+## juce-valuetree-listener-reentrancy
+
+Flags `ValueTree::Listener` callbacks that change the tree they're being told about. The change notifies the listeners again while they're still handling the previous change, which can recurse or leave other listeners seeing changes out of order. Make the change asynchronously instead.
+
+```cpp
+void valueTreePropertyChanged(juce::ValueTree& tree, const juce::Identifier&) override
+{
+    tree.setProperty("dirty", true, nullptr); // warning
+}
 ```
 
 ## juce-webview-dev-server-in-release

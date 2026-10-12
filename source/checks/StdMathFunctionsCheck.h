@@ -2,10 +2,12 @@
 
 #include "utils/JuceTidyUtils.h"
 
+#include <clang-tidy/utils/IncludeInserter.h>
 #include <clang/ASTMatchers/ASTMatchFinder.h>
 #include <llvm/ADT/STLExtras.h>
 #include <llvm/ADT/StringExtras.h>
 #include <llvm/ADT/StringMap.h>
+#include <llvm/ADT/StringSwitch.h>
 
 #include <algorithm>
 
@@ -19,12 +21,19 @@ namespace clang::tidy::juce
             StdMathFunctionsCheck(StringRef name, ClangTidyContext* context)
                 : JuceTidyCheck{ name, context }
                 , preferJuceFunctions{ Options.get("PreferJuceFunctions", false) }
+                , includeInserter{ Options.getLocalOrGlobal("IncludeStyle", tidy::utils::IncludeSorter::IS_LLVM), areDiagsSelfContained() }
             {
             }
 
             void storeOptions(ClangTidyOptions::OptionMap& options) override
             {
                 Options.store(options, "PreferJuceFunctions", preferJuceFunctions);
+                Options.store(options, "IncludeStyle", includeInserter.getStyle());
+            }
+
+            void registerPPCallbacks(const SourceManager&, Preprocessor* preprocessor, Preprocessor*) override
+            {
+                includeInserter.registerPreprocessor(preprocessor);
             }
 
             void registerMatchers(ast_matchers::MatchFinder* finder) override
@@ -51,10 +60,29 @@ namespace clang::tidy::juce
 
                 finder->addMatcher(callTo(functionDecl(hasAnyName(standardNames))), this);
                 finder->addMatcher(callTo(functionDecl(hasAnyName(utils::toStringRefs(juceNames))).bind("juce")), this);
+
+                if (getLangOpts().CPlusPlus20 && !preferJuceFunctions)
+                {
+                    const auto constants = classTemplateSpecializationDecl(hasName("::juce::MathConstants"),
+                                                                           hasTemplateArgument(0, refersToType(qualType(realFloatingPointType()).bind("floatType"))));
+
+                    finder->addMatcher(
+                        declRefExpr(unless(isInTemplateInstantiation()),
+                                    to(varDecl(hasAnyName("pi", "twoPi", "halfPi", "euler", "sqrt2"),
+                                               hasDeclContext(constants))))
+                            .bind("constant"),
+                        this);
+                }
             }
 
             void check(const ast_matchers::MatchFinder::MatchResult& result) override
             {
+                if (const auto* constant = result.Nodes.getNodeAs<DeclRefExpr>("constant"))
+                {
+                    reportMathConstant(*constant, *result.Nodes.getNodeAs<QualType>("floatType"), *result.SourceManager);
+                    return;
+                }
+
                 const auto* call = result.Nodes.getNodeAs<CallExpr>("call");
                 const auto* reference = result.Nodes.getNodeAs<DeclRefExpr>("reference");
                 const auto function = getFunction(*call, *reference, result.Nodes.getNodeAs<FunctionDecl>("juce") != nullptr);
@@ -91,6 +119,36 @@ namespace clang::tidy::juce
             }
 
         private:
+            void reportMathConstant(const DeclRefExpr& constant, QualType floatType, const SourceManager& sourceManager)
+            {
+                if (utils::isInMacroBody(constant.getBeginLoc(), sourceManager))
+                    return;
+
+                const auto name = constant.getDecl()->getName();
+                const auto suffix = floatType->isSpecificBuiltinType(BuiltinType::Double)
+                                      ? std::string{}
+                                      : "_v<" + floatType.getAsString(PrintingPolicy{ getLangOpts() }) + ">";
+                const auto standardConstant = [&suffix](StringRef standardName) {
+                    return "std::numbers::" + standardName.str() + suffix;
+                };
+                const auto replacement = llvm::StringSwitch<std::string>(name)
+                                             .Case("pi", standardConstant("pi"))
+                                             .Case("twoPi", "(2 * " + standardConstant("pi") + ")")
+                                             .Case("halfPi", "(" + standardConstant("pi") + " / 2)")
+                                             .Case("euler", standardConstant("e"))
+                                             .Default(standardConstant("sqrt2"));
+                const auto spelling = utils::getSourceText(constant.getSourceRange(), sourceManager, getLangOpts());
+
+                const auto diagnostic = diag(constant.getBeginLoc(),
+                                             "use '%0' rather than '%1'")
+                                     << StringRef{ replacement }.trim("()")
+                                     << spelling.value_or(("juce::MathConstants::" + name).str())
+                                     << FixItHint::CreateReplacement(constant.getSourceRange(), replacement);
+
+                if (auto include = includeInserter.createIncludeInsertion(sourceManager.getFileID(sourceManager.getExpansionLoc(constant.getBeginLoc())), "<numbers>"))
+                    diagnostic << *include;
+            }
+
             enum class Form
             {
                 maths,
@@ -469,6 +527,7 @@ namespace clang::tidy::juce
             }
 
             const bool preferJuceFunctions;
+            tidy::utils::IncludeInserter includeInserter;
         };
     } // namespace std_math_functions
 

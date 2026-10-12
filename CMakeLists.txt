@@ -47,7 +47,6 @@ set_target_properties(JuceTidy
 
 include(GNUInstallDirs)
 install(TARGETS JuceTidy LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR})
-install(FILES config/juce.clang-tidy DESTINATION ${CMAKE_INSTALL_DATADIR}/JuceTidy)
 
 if(JUCE_TIDY_BUILD_TESTS)
     enable_testing()
