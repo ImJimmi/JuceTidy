@@ -38,3 +38,20 @@ check name: build
         -std="${std:-c++20}" \
         -isystem test/include \
         {{ if os() == "macos" { "-isysroot \"$(xcrun --show-sdk-path)\"" } else { "" } }}
+
+release part="patch":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    current=$(sed -nE 's|^ *VERSION ([0-9]+\.[0-9]+\.[0-9]+)$|\1|p' CMakeLists.txt)
+    IFS=. read -r major minor patch <<< "$current"
+    case "{{part}}" in
+        major) version="$((major + 1)).0.0" ;;
+        minor) version="$major.$((minor + 1)).0" ;;
+        patch) version="$major.$minor.$((patch + 1))" ;;
+        *) echo "Unknown version part '{{part}}', expected major, minor, or patch" >&2; exit 1 ;;
+    esac
+    sed -i.bak -E "s|^( *VERSION )$current\$|\1$version|" CMakeLists.txt
+    rm CMakeLists.txt.bak
+    git commit -m "Bump version to $version" CMakeLists.txt
+    git tag "v$version"
+    git push --atomic origin HEAD "v$version"
