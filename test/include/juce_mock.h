@@ -553,8 +553,14 @@ public:
 class Logger
 {
 public:
+    virtual ~Logger();
+
+    static void setCurrentLogger (Logger* newLogger) noexcept;
     static void writeToLog (const String& message);
     static void outputDebugString (const String& text);
+
+protected:
+    virtual void logMessage (const String& message) = 0;
 };
 
 class File

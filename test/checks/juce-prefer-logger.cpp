@@ -28,3 +28,30 @@ void report(int value, std::FILE* file)
     std::fprintf(file, "%d\n", value);
     std::fputs("saved\n", file);
 }
+
+class ConsoleLogger : public juce::Logger
+{
+protected:
+    void logMessage(const juce::String& message) override
+    {
+        std::cout << message.toStdString() << '\n';
+        std::println("{}", message.toStdString());
+        std::fputs(message.toStdString().c_str(), stderr);
+
+        const auto write = [](const juce::String& text) {
+            std::cerr << text.toStdString() << '\n';
+        };
+
+        write(message);
+        flush();
+    }
+
+private:
+    void flush();
+};
+
+void ConsoleLogger::flush()
+{
+    std::fflush(stdout);
+    std::puts("");
+}

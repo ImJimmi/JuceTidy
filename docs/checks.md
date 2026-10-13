@@ -611,7 +611,7 @@ jassert(false);     // jassertfalse;
 
 ## juce-prefer-logger
 
-Flags writing to `std::cout`, `std::cerr` and the other standard streams, and to the console with `std::print()`, `std::println()`, `printf()`, `puts()` and similar. Functions that take a `FILE*`, such as `fprintf()` or `std::print(stream, ...)`, are only flagged when writing to `stdout` or `stderr`. `juce::Logger::writeToLog()` sends the message to the debugger, and to any logger set with `juce::Logger::setCurrentLogger()`, such as a `juce::FileLogger`.
+Flags writing to `std::cout`, `std::cerr` and the other standard streams, and to the console with `std::print()`, `std::println()`, `printf()`, `puts()` and similar. Functions that take a `FILE*`, such as `fprintf()` or `std::print(stream, ...)`, are only flagged when writing to `stdout` or `stderr`. `juce::Logger::writeToLog()` sends the message to the debugger, and to any logger set with `juce::Logger::setCurrentLogger()`, such as a `juce::FileLogger`. Writing to the console is allowed inside the methods of a class derived from `juce::Logger`, as that's where the messages from `writeToLog()` end up.
 
 ```cpp
 std::cout << "Loaded preset\n";              // warning

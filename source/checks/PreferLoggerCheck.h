@@ -42,9 +42,12 @@ namespace clang::tidy::juce
                     return result;
                 };
 
+                const auto inLogger = hasAncestor(cxxMethodDecl(ofClass(cxxRecordDecl(isDerivedFrom(hasName("::juce::Logger"))))));
+
                 finder->addMatcher(
                     declRefExpr(unless(isInTemplateInstantiation()),
                                 unless(isExpansionInSystemHeader()),
+                                unless(inLogger),
                                 to(varDecl(hasAnyName(utils::toStringRefs(qualified(streams)))).bind("output")))
                         .bind("reference"),
                     this);
@@ -52,6 +55,7 @@ namespace clang::tidy::juce
                 finder->addMatcher(
                     callExpr(unless(isInTemplateInstantiation()),
                              unless(isExpansionInSystemHeader()),
+                             unless(inLogger),
                              callee(functionDecl(hasAnyName(utils::toStringRefs(qualified(functions)))).bind("output")))
                         .bind("reference"),
                     this);
