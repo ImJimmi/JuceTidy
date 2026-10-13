@@ -22,7 +22,8 @@ namespace clang::tidy::juce
                                      hasDeclaration(cxxConstructorDecl(ofClass(hasName("::juce::Identifier")))),
                                      hasArgument(0, ignoringParenImpCasts(stringLiteral())),
                                      unless(hasAncestor(varDecl(hasStaticStorageDuration()))),
-                                     unless(hasAncestor(fieldDecl())))
+                                     unless(hasAncestor(fieldDecl())),
+                                     unless(forCallable(cxxConstructorDecl())))
                         .bind("construction"),
                     this);
             }

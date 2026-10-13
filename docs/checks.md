@@ -288,6 +288,8 @@ webview.goToURL("juce://juce.backend/index.html"); // webview.goToURL(juce::WebB
 
 Flags `juce::Identifier`s created from string literals every time code runs. Creating an Identifier is slow, so keep a static one.
 
+Identifiers created once, early on, are allowed: in static or member initialisers, and in constructors. Lambdas written inside a constructor are still checked, since they usually run later as callbacks.
+
 ```cpp
 tree.getProperty("gain"); // warning
 
