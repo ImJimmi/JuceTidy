@@ -74,6 +74,7 @@
 - [juce-undo-manager-consistency](#juce-undo-manager-consistency)
 - [juce-unit-test-assertions](#juce-unit-test-assertions)
 - [juce-unknown-parameter-id](#juce-unknown-parameter-id)
+- [juce-unnecessary-write-pointer](#juce-unnecessary-write-pointer)
 - [juce-unowned-child-component](#juce-unowned-child-component)
 - [juce-unprepared-dsp](#juce-unprepared-dsp)
 - [juce-unregistered-unit-test](#juce-unregistered-unit-test)
@@ -946,6 +947,17 @@ Flags parameter lookups whose ID doesn't match any parameter created in the same
 
 ```cpp
 apvts.getRawParameterValue("gian"); // warning: did you mean 'gain'?
+```
+
+## juce-unnecessary-write-pointer
+
+Flags `getWritePointer` and `getArrayOfWritePointers` on a `juce::AudioBuffer` when the samples are only ever read. Both calls mark the buffer as not clear, so `hasBeenCleared()` returns false and code that skips silent buffers can't. Use `getReadPointer` or `getArrayOfReadPointers` instead.
+
+```cpp
+const auto* data = buffer.getWritePointer(channel); // warning
+
+for (int i = 0; i < buffer.getNumSamples(); ++i)
+    peak = std::max(peak, std::abs(data[i]));
 ```
 
 ## juce-unowned-child-component

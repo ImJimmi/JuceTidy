@@ -72,6 +72,7 @@
 #include "checks/UndoManagerConsistencyCheck.h"
 #include "checks/UnitTestAssertionsCheck.h"
 #include "checks/UnknownParameterIdCheck.h"
+#include "checks/UnnecessaryWritePointerCheck.h"
 #include "checks/UnownedChildComponentCheck.h"
 #include "checks/UnpreparedDspCheck.h"
 #include "checks/UnregisteredUnitTestCheck.h"
@@ -171,6 +172,7 @@ public:
         factories.registerCheck<UndoManagerConsistencyCheck>("juce-undo-manager-consistency");
         factories.registerCheck<UnitTestAssertionsCheck>("juce-unit-test-assertions");
         factories.registerCheck<UnknownParameterIdCheck>("juce-unknown-parameter-id");
+        factories.registerCheck<UnnecessaryWritePointerCheck>("juce-unnecessary-write-pointer");
         factories.registerCheck<UnownedChildComponentCheck>("juce-unowned-child-component");
         factories.registerCheck<UnpreparedDspCheck>("juce-unprepared-dsp");
         factories.registerCheck<UnregisteredUnitTestCheck>("juce-unregistered-unit-test");

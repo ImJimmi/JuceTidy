@@ -1200,7 +1200,11 @@ public:
     int getNumChannels() const noexcept;
     int getNumSamples() const noexcept;
     const Type* getReadPointer (int channel) const noexcept;
+    const Type* getReadPointer (int channel, int sampleIndex) const noexcept;
     Type* getWritePointer (int channel) noexcept;
+    Type* getWritePointer (int channel, int sampleIndex) noexcept;
+    const Type* const* getArrayOfReadPointers() const noexcept;
+    Type* const* getArrayOfWritePointers() noexcept;
     Type getSample (int channel, int sampleIndex) const noexcept;
     void setSample (int destChannel, int destSample, Type newValue) noexcept;
     void addSample (int destChannel, int destSample, Type valueToAdd) noexcept;
