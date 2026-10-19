@@ -774,11 +774,17 @@ class MouseEvent
 {
 };
 
+class Button;
+class TextButton;
+
 class LookAndFeel
 {
 public:
     virtual ~LookAndFeel();
     static void setDefaultLookAndFeel (LookAndFeel* newDefaultLookAndFeel) noexcept;
+
+    virtual void drawButtonBackground (Graphics&, Button&, const Colour& backgroundColour, bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown);
+    virtual int getTextButtonWidthToFitText (TextButton&, int buttonHeight);
 };
 
 class LookAndFeel_V4 : public LookAndFeel
@@ -824,6 +830,7 @@ public:
     void addChildComponent (Component& child, int zOrder = -1);
     void deleteAllChildren();
     void removeChildComponent (Component* child);
+    void removeAllChildren();
 
     void setSize (int width, int height);
     void setBounds (int x, int y, int width, int height);
@@ -835,6 +842,8 @@ public:
     void setOpaque (bool shouldBeOpaque);
     void setBufferedToImage (bool shouldBeBuffered);
     void toFront (bool shouldAlsoGainKeyboardFocus);
+    void toBack();
+    void toBehind (Component* other);
     void addToDesktop (int windowStyleFlags, void* nativeWindowToAttachTo = nullptr);
     Rectangle<int> getLocalBounds() const noexcept;
     int getWidth() const noexcept;
@@ -925,6 +934,12 @@ public:
     public:
         virtual ~Listener() = default;
         virtual void sliderValueChanged (Slider*) = 0;
+    };
+
+    struct LookAndFeelMethods
+    {
+        virtual ~LookAndFeelMethods() = default;
+        virtual void drawRotarySlider (Graphics&, int x, int y, int width, int height, float sliderPosProportional, float rotaryStartAngle, float rotaryEndAngle, Slider&) = 0;
     };
 
     void addListener (Listener* listener);

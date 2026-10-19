@@ -531,14 +531,27 @@ MyComponent::~MyComponent()
 
 ## juce-paint-side-effects
 
-Flags `repaint()`, `setBounds`, `addAndMakeVisible` and `setVisible` in `paint`. Each triggers another repaint, which can loop forever.
+Flags changes to components while painting: in `paint()`, `paintOverChildren()`, LookAndFeel methods that are given a `juce::Graphics` (such as `drawButtonBackground()`), and every function they call.
+
+- `repaint()`, `setBounds()` and `setVisible()` each trigger another repaint, which can loop forever.
+- `addAndMakeVisible()`, `addChildComponent()`, `removeChildComponent()`, `removeAllChildren()`, `deleteAllChildren()`, `toFront()`, `toBack()` and `toBehind()` change the component hierarchy. JUCE iterates over a component's children while painting them, so changing them can crash.
+- Constructing a component, including a `juce::Drawable`, whether directly or with `std::make_unique()` and the like. Components are costly to create, and are usually added to the hierarchy, often by their own constructor. Members a component's constructor initialises aren't flagged separately.
 
 ```cpp
 void paint(juce::Graphics& g) override
 {
     repaint(); // warning
+    updateShadow();
+}
+
+void updateShadow()
+{
+    if (auto* parent = getParentComponent())
+        parent->addChildComponent(shadow, 0); // warning: called from 'paint()'
 }
 ```
+
+Problems in called functions are reported where they happen, with notes showing how they're reached from painting. Lambdas are only followed where they're called, so work deferred with `juce::MessageManager::callAsync()` isn't flagged. Calls into JUCE and the standard library aren't checked, but their templates are followed back into your code, such as to the constructor that `std::make_unique()` calls. Functions defined in other `.cpp` files can't be followed, but creating a component is flagged even when its constructor is defined elsewhere.
 
 ## juce-parameter-id-limits
 
