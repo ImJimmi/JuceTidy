@@ -196,6 +196,10 @@ public:
     Rectangle (ValueType x, ValueType y, ValueType w, ValueType h) noexcept;
     void setWidth (ValueType newWidth) noexcept;
     void setHeight (ValueType newHeight) noexcept;
+    void reduce (ValueType deltaX, ValueType deltaY) noexcept;
+    Rectangle reduced (ValueType delta) const noexcept;
+    Rectangle withSizeKeepingCentre (ValueType newWidth, ValueType newHeight) const noexcept;
+    Rectangle<float> toFloat() const noexcept;
 };
 
 template <typename ValueType>
@@ -732,6 +736,13 @@ public:
     static std::unique_ptr<Drawable> createFromImageData (const void* data, size_t numBytes);
 };
 
+class AffineTransform
+{
+public:
+    AffineTransform() noexcept;
+    static AffineTransform translation (float deltaX, float deltaY) noexcept;
+};
+
 class Path
 {
 public:
@@ -739,6 +750,18 @@ public:
     void lineTo (float endX, float endY);
     void closeSubPath();
     void addRoundedRectangle (float x, float y, float width, float height, float cornerSize);
+    template <typename ValueType>
+    void addRectangle (Rectangle<ValueType> rectangle);
+    template <typename ValueType>
+    void addRoundedRectangle (Rectangle<ValueType> rectangle, float cornerSize);
+    void addEllipse (Rectangle<float> area);
+    void applyTransform (const AffineTransform& transform) noexcept;
+};
+
+class PathStrokeType
+{
+public:
+    PathStrokeType (float strokeThickness) noexcept;
 };
 
 class ColourGradient
@@ -754,6 +777,10 @@ class Graphics
 public:
     void fillAll (Colour) const;
     void fillPath (const Path& path) const;
+    void strokePath (const Path& path, const PathStrokeType& strokeType, const AffineTransform& transform = {}) const;
+    void drawRoundedRectangle (Rectangle<float> rectangle, float cornerSize, float lineThickness) const;
+    void drawEllipse (Rectangle<float> area, float lineThickness) const;
+    void drawRect (Rectangle<float> rectangle, float lineThickness = 1.0f) const;
     void setGradientFill (const ColourGradient& gradient);
     void fillAll() const;
     void fillRect (Rectangle<int> area) const;

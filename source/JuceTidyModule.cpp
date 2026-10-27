@@ -6,6 +6,7 @@
 #include "checks/BufferPointerInSampleLoopCheck.h"
 #include "checks/BufferedParentCheck.h"
 #include "checks/CallbackDanglingCaptureCheck.h"
+#include "checks/ClippedStrokeCheck.h"
 #include "checks/DuplicateWebviewNameCheck.h"
 #include "checks/EmptyStateInformationCheck.h"
 #include "checks/ExpensivePaintCheck.h"
@@ -106,6 +107,7 @@ public:
         factories.registerCheck<BufferPointerInSampleLoopCheck>("juce-buffer-pointer-in-sample-loop");
         factories.registerCheck<BufferedParentCheck>("juce-buffered-parent");
         factories.registerCheck<CallbackDanglingCaptureCheck>("juce-callback-dangling-capture");
+        factories.registerCheck<ClippedStrokeCheck>("juce-clipped-stroke");
         factories.registerCheck<DuplicateWebviewNameCheck>("juce-duplicate-webview-name");
         factories.registerCheck<EmptyStateInformationCheck>("juce-empty-state-information");
         factories.registerCheck<ExpensivePaintCheck>("juce-expensive-paint");

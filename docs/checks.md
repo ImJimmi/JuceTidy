@@ -8,6 +8,7 @@
 - [juce-buffer-pointer-in-sample-loop](#juce-buffer-pointer-in-sample-loop)
 - [juce-buffered-parent](#juce-buffered-parent)
 - [juce-callback-dangling-capture](#juce-callback-dangling-capture)
+- [juce-clipped-stroke](#juce-clipped-stroke)
 - [juce-duplicate-webview-name](#juce-duplicate-webview-name)
 - [juce-empty-state-information](#juce-empty-state-information)
 - [juce-expensive-paint](#juce-expensive-paint)
@@ -183,6 +184,15 @@ int clicks = 0;
 button.onClick = [&] { // warning
     ++clicks;
 };
+```
+
+## juce-clipped-stroke
+
+Flags `drawRoundedRectangle()` and `drawEllipse()` given a component's local bounds, and `strokePath()` on a local `juce::Path` built from them with `addRectangle()`, `addRoundedRectangle()` or `addEllipse()`. The stroke is centred on the edge, so half of it is outside the component and gets clipped. Reduce the bounds by half the stroke thickness.
+
+```cpp
+g.drawRoundedRectangle(getLocalBounds().toFloat(), 4.0f, 2.0f); // warning
+g.drawRoundedRectangle(getLocalBounds().toFloat().reduced(1.0f), 4.0f, 2.0f);
 ```
 
 ## juce-duplicate-webview-name
